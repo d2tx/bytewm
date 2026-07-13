@@ -1,0 +1,8 @@
+*.o
+*.elf
+/bytewm
+/apps/bytelaunch
+/apps/bytesnap
+/apps/bytevol
+/apps/bytewdm
+/apps/bytify

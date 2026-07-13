@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=bytewm
+Comment=Retro gruvbox-themed tiling window manager
+Exec=bytewm
+Type=Application

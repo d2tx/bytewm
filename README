@@ -1,0 +1,104 @@
+bytewm - retro gruvbox tiling window manager
+
+bytewm is derived from dwm (suckless.org) — the event loop, client
+management, tag system, bar layout, and keybinding dispatch are
+adapted from dwm's architecture. See LICENSE for details.
+
+KEYBINDINGS
+  All use Super (Mod4 / Windows key).
+
+  Super+Return         Toggle scratchpad (dropdown terminal)
+  Super+Shift+Return   Open terminal (st)
+  Super+p              Open launcher (bytelaunch)
+  Super+s              Screenshot (bytesnap)
+
+  Super+j / k          Focus next/prev window
+  Super+i / d          Increase/decrease master count
+  Super+h / l          Shrink/grow master area
+  Super+Shift+h / l    Shrink/grow individual client
+  Super+z              Zoom (focus master window)
+  Super+Left/Right/Up/Down     Move window by 10px (floating layout only)
+  Super+Shift+Left/Right/Up/Down  Resize window by 10px (floating layout only)
+  Super+Tab            View previous tag
+  Super+w              Kill focused window
+
+  Super+t              Tile layout (master-stack)
+  Super+b              BSP layout (balanced binary tree)
+  Super+m              Monocle layout (fullscreen for all)
+  Super+Space          Floating layout (manual positioning)
+  Super+Shift+Space    Toggle floating on focused window (per-window)
+  Super+f              Toggle fullscreen
+
+  Super+1..5           View tag I..V
+  Super+Shift+1..5     Send window to tag I..V
+  Super+Ctrl+1..5      Toggle tag visibility
+  Super+0              View all tags
+  Super+Shift+0        Send window to all tags
+
+  Super+F10            Volume down 5%
+  Super+F11            Volume up 5%
+  Super+F12            Mute/unmute
+  Super+Shift+v        Show volume OSD (bytevol)
+
+  Super+, / .          Previous/next monitor
+  Super+Shift+q        Quit (bytewm-exit)
+
+MOUSE
+  Super+LeftClick     Move window (tiled → floating + move)
+  Super+MiddleClick   Zoom
+  Super+RightClick    Resize window (tiled → floating + resize)
+  Super+Scroll        Cycle windows
+
+LAYOUTS
+  tile      Master-stack: large master on left, stack on right
+  bsp       Balanced binary tree: equally sized grid
+  monocle   All windows fullscreen, tab-like switching
+  floating  Manual positioning (no auto-tiling)
+
+AUTOSTART
+  Place executables in ~/.config/bytewm/autostart.sh
+  (e.g. feh --bg-scale ~/wallpaper.jpg, picom &)
+
+STATUS BAR
+  Place ~/.config/bytewm/status.sh to show custom status text.
+  Output one line to stdout (CPU, RAM, time, etc.).
+
+APPS
+  bytewm ships with its own ecosystem of companion utilities:
+
+  bytewdm      Display manager (login greeter). Written in C.
+               Supports PAM authentication, user/session selection,
+               and starts the X server. Runs as a systemd service.
+
+  bytelaunch   Application launcher. dmenu-style — scans $PATH,
+               filters as you type, launches on Enter. Written in C.
+
+  bytify       Notification daemon. Reads plain text from stdin and
+               draws an OSD overlay on screen. Written in C.
+
+  bytevol      Volume OSD. Shows a volume bar overlay for ~2 seconds.
+               Triggered by Super+Shift+v. Written in C.
+
+  bytesnap     Screenshot utility. Captures the root window and saves
+               as PPM. Triggered by Super+s. Written in C.
+
+  bytewm-exit  Logout/restart/shutdown dialog. A 3-entry menu shown
+               when pressing Super+Shift+q. Written in C.
+
+  bytefetch    System info fetcher (neofetch-like). Written entirely
+               in x86_64 assembly.
+
+FILES
+  bytewm.c       Main source
+  config.h       Compiled configuration
+  config.def.h   Default configuration template
+  Makefile       Build system
+  apps/          Companion apps:
+                   bytelaunch  - dmenu-style app launcher
+                   bytesnap    - screenshot utility
+                   bytevol     - volume OSD
+                   bytify      - notification daemon
+                   bytewm-exit - logout/restart/shutdown dialog
+                   bytewdm     - display manager (login greeter)
+                   bytefetch   - system info (neofetch-like, x86_64 asm)
+  examples/      Autostart, status script, .desktop file, st theme
