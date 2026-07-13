@@ -88,6 +88,9 @@ APPS
   bytefetch    System info fetcher (neofetch-like). Written entirely
                in x86_64 assembly.
 
+  bytepass     Password generator. Reads /dev/urandom, copies to
+               clipboard via xclip. Written in x86_64 assembly.
+
 FILES
   bytewm.c       Main source
   config.h       Compiled configuration
@@ -101,4 +104,5 @@ FILES
                    bytewm-exit - logout/restart/shutdown dialog
                    bytewdm     - display manager (login greeter)
                    bytefetch   - system info (neofetch-like, x86_64 asm)
+                   bytepass    - password generator (x86_64 asm)
   examples/      Autostart, status script, .desktop file, st theme
