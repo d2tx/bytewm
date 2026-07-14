@@ -64,6 +64,31 @@ STATUS BAR
   Place ~/.config/bytewm/status.sh to show custom status text.
   Output one line to stdout (CPU, RAM, time, etc.).
 
+THEMING
+  A full Gruvbox GTK theme is included in themes/bytewm-gruvbox/.
+  It is compiled from the Arc theme using the Gruvbox palette.
+  Install with:
+
+    mkdir -p ~/.themes
+    cp -r themes/bytewm-gruvbox ~/.themes/
+
+  Then enable in ~/.config/gtk-3.0/settings.ini:
+
+    gtk-theme-name=bytewm-gruvbox
+
+  A matching icon theme is available from:
+  https://github.com/SylEleuth/gruvbox-plus-icon-pack
+
+  Install with:
+
+    git clone https://github.com/SylEleuth/gruvbox-plus-icon-pack
+    cp -r gruvbox-plus-icon-pack/Gruvbox-Plus-Dark ~/.icons/
+    scripts/folders-color-chooser -c orange  # folder accent
+
+  Then set in ~/.config/gtk-3.0/settings.ini:
+
+    gtk-icon-theme-name=Gruvbox-Plus-Dark
+
 APPS
   bytewm ships with its own ecosystem of companion utilities:
 
@@ -117,4 +142,5 @@ FILES
                    bytepass    - password generator (x86_64 asm)
                    bytelock    - screen locker (x86_64 asm)
                    bytekill    - process killer (x86_64 asm)
-  examples/      Autostart, status script, .desktop file, st theme
+   themes/        bytewm-gruvbox GTK theme (Arc-based, Gruvbox colors)
+   examples/      Autostart, status script, .desktop file, st theme
