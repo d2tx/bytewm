@@ -1,7 +1,7 @@
 #!/bin/sh
 # bytewm status bar - cpu, mem, temp, time
 
-cpu=$(top -bn1 2>/dev/null | awk '/^%Cpu/ {printf "%d", int($2)}')
+cpu=$(top -bn1 2>/dev/null | awk '/^%Cpu/ {printf "%d", int(100-$8)}')
 [ -z "$cpu" ] && cpu=0
 
 mem_total=$(free -m 2>/dev/null | awk '/^Mem:/ {print $2}')
