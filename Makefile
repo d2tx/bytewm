@@ -1,9 +1,9 @@
 # bytewm - retro tiling window manager
 include config.mk
 
-APPBINS = bytify bytelaunch bytesnap bytevol bytewm-exit
+APPBINS = bytify bytelaunch bytesnap bytevol bytewm-exit bytekill bytelock bytepass bytefetch
 
-all: bytewm apps bytewdm
+all: bytewm apps bytewdm bytekill bytelock bytepass bytefetch
 
 bytewm: bytewm.c config.h
 	$(CC) $(CFLAGS) -o $@ bytewm.c $(LDFLAGS)
@@ -23,8 +23,24 @@ apps:
 bytewdm: apps/bytewdm.c
 	$(CC) $(APPS_CFLAGS) -o apps/$@ apps/bytewdm.c -lX11 -lpam
 
+bytekill: apps/bytekill.s
+	as -o apps/bytekill.o apps/bytekill.s
+	ld -o apps/bytekill apps/bytekill.o
+
+bytelock: apps/bytelock.s
+	as -o apps/bytelock.o apps/bytelock.s
+	$(CC) -o apps/bytelock apps/bytelock.o -lX11 -lpam
+
+bytepass: apps/bytepass.s
+	as -o apps/bytepass.o apps/bytepass.s
+	ld -o apps/bytepass apps/bytepass.o
+
+bytefetch: apps/bytefetch.s
+	as -o apps/bytefetch.o apps/bytefetch.s
+	ld -o apps/bytefetch apps/bytefetch.o
+
 clean:
-	rm -f bytewm apps/bytewdm
+	rm -f bytewm apps/bytewdm apps/bytekill.o apps/bytelock.o apps/bytepass.o apps/bytefetch.o
 	for app in $(APPBINS); do \
 		rm -f apps/$$app 2>/dev/null; \
 	done

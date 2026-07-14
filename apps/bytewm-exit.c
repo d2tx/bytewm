@@ -22,13 +22,14 @@ static const char *fg = "#ebdbb2";
 static const char *selbg = "#689d6a";
 static const char *selfg = "#282828";
 
-static const char *items[] = { "Logout", "Restart", "Shutdown" };
+static const char *items[] = { "Lock", "Logout", "Restart", "Shutdown" };
 static const char *cmds[] = {
+	"bytelock",
 	"pkill -x -u \"$USER\" bytewm",
 	"st -e sh -c \"sudo systemctl reboot\"",
 	"st -e sh -c \"sudo systemctl poweroff\""
 };
-static int nitems = 3;
+static int nitems = 4;
 
 static unsigned long
 getcol(const char *c)

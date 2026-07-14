@@ -57,6 +57,7 @@ static const Layout layouts[] = {
 static const char *termcmd[]  = { "st", NULL };
 static const char *menucmd[]  = { "bytelaunch", NULL };
 static const char *snapcmd[]  = { "bytesnap", NULL };
+static const char *lockcmd[]  = { "bytelock", NULL };
 
 static const char *scratchpadcmd[] = { "st", "-t", "scratchpad", "-c", "scratchpad", NULL };
 
@@ -65,6 +66,7 @@ static const Key keys[] = {
 	{ MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
 	{ MODKEY,                       XK_Return, togglescratch,  {.v = NULL } },
 	{ MODKEY,                       XK_s,      spawn,          {.v = snapcmd } },
+	{ MODKEY|ControlMask,           XK_l,      spawn,          {.v = lockcmd } },
 
 	{ MODKEY,                       XK_j,      focusstack,     {.i = +1 } },
 	{ MODKEY,                       XK_k,      focusstack,     {.i = -1 } },

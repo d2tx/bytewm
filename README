@@ -41,6 +41,7 @@ KEYBINDINGS
   Super+Shift+v        Show volume OSD (bytevol)
 
   Super+, / .          Previous/next monitor
+  Super+Ctrl+L         Lock screen (bytelock)
   Super+Shift+q        Quit (bytewm-exit)
 
 MOUSE
@@ -82,14 +83,23 @@ APPS
   bytesnap     Screenshot utility. Captures the root window and saves
                as PPM. Triggered by Super+s. Written in C.
 
-  bytewm-exit  Logout/restart/shutdown dialog. A 3-entry menu shown
-               when pressing Super+Shift+q. Written in C.
+  bytewm-exit  Logout/restart/shutdown/lock dialog. 4-entry menu
+               shown when pressing Super+Shift+q. Written in C.
+
+  bytelock     Screen locker. Gruvbox themed, PAM authentication
+                via pam_unix.so. Written entirely in x86_64 assembly,
+                links libX11 and libpam.
 
   bytefetch    System info fetcher (neofetch-like). Written entirely
-               in x86_64 assembly.
+               in x86_64 assembly, pure syscalls, no libc.
 
   bytepass     Password generator. Reads /dev/urandom, copies to
-               clipboard via xclip. Written in x86_64 assembly.
+               clipboard via xclip. Written entirely in x86_64
+               assembly, pure syscalls, no libc.
+
+  bytekill     Process killer. Scans /proc/*/comm, sends signals
+               by name or PID. Written entirely in x86_64 assembly,
+               pure syscalls, no libc.
 
 FILES
   bytewm.c       Main source
@@ -105,4 +115,6 @@ FILES
                    bytewdm     - display manager (login greeter)
                    bytefetch   - system info (neofetch-like, x86_64 asm)
                    bytepass    - password generator (x86_64 asm)
+                   bytelock    - screen locker (x86_64 asm)
+                   bytekill    - process killer (x86_64 asm)
   examples/      Autostart, status script, .desktop file, st theme
