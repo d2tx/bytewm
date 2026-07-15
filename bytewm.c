@@ -1217,27 +1217,35 @@ swapclients(const Arg *arg)
 {
 	if (!selmon || !selmon->sel) return;
 	Client *c = selmon->sel;
-	Client **where = NULL;
 
 	if (arg->i > 0) {
-		/* find position after the next visible client */
 		Client *n;
 		for (n = c->next; n && !ISVISIBLE(n, selmon->tags); n = n->next);
 		if (!n) return;
-		where = &n->next;
+		detach(c);
+		c->next = n->next;
+		n->next = c;
 	} else {
-		/* find position of the previous visible client */
 		Client *p, *prev = NULL;
 		for (p = selmon->clients; p && p != c; p = p->next)
 			if (ISVISIBLE(p, selmon->tags))
 				prev = p;
 		if (!prev) return;
-		for (where = &selmon->clients; *where && *where != prev; where = &(*where)->next);
+		detach(c);
+		/* find slot before prev in modified list */
+		if (selmon->clients == prev) {
+			c->next = selmon->clients;
+			selmon->clients = c;
+		} else {
+			Client *q;
+			for (q = selmon->clients; q && q->next != prev; q = q->next);
+			c->next = q->next;
+			q->next = c;
+		}
 	}
-
-	detach(c);
-	c->next = *where;
-	*where = c;
+	XWarpPointer(dpy, None, c->win, 0, 0, 0, 0, c->w / 2, c->h / 2);
+	XSync(dpy, False);
+	focus(c, 1);
 	arrange(selmon);
 	drawbars();
 }
