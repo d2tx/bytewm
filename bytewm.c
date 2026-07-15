@@ -1314,7 +1314,10 @@ setmfact(const Arg *arg)
 void
 setcfact(const Arg *arg)
 {
-	if (!selmon) return;
+	/* only works in BSP layout */
+	if (!selmon || !selmon->lt[selmon->layout]->arrange
+	    || selmon->lt[selmon->layout]->arrange != bsp)
+		return;
 	Node *n = (selmon->sel && selmon->sel->node)
 	          ? selmon->sel->node->parent
 	          : NULL;
