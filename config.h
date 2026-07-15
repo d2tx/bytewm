@@ -29,7 +29,7 @@ static const unsigned int barheight = 20;
 static int               showbar    = 1;
 static const int         topbar     = 1;
 
-static const int swallowfloating = 0;
+static const int swallowfloating = 0;  /* 1 = swallow even floating terminals */
 
 #define MODKEY Mod4Mask
 #define TAGKEYS(KEY,TAG) \
@@ -74,8 +74,8 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_d,      incnmaster,     {.i = -1 } },
 	{ MODKEY,                       XK_h,      setmfact,       {.f = -0.05 } },
 	{ MODKEY,                       XK_l,      setmfact,       {.f = +0.05 } },
-	{ MODKEY|ShiftMask,             XK_h,      setcfact,       {.f = -0.05 } },
-	{ MODKEY|ShiftMask,             XK_l,      setcfact,       {.f = +0.05 } },
+	{ MODKEY|ControlMask,          XK_h,      setcfact,       {.f = -0.05 } },
+	{ MODKEY|ControlMask,          XK_l,      setcfact,       {.f = +0.05 } },
 
 	{ MODKEY,                       XK_z,      zoom,           {.v = NULL } },
 	{ MODKEY,                       XK_Left,   movearrow,      {.i = 0 } },
@@ -123,4 +123,6 @@ static const Button buttons[] = {
 	{ MODKEY, Button3, resizemouse,   {0} },
 	{ MODKEY, Button4, focusstack,    {.i = +1 } },
 	{ MODKEY, Button5, focusstack,    {.i = -1 } },
+	{ MODKEY|ShiftMask, Button4, setcfact, {.f = -0.05 } },
+	{ MODKEY|ShiftMask, Button5, setcfact, {.f = +0.05 } },
 };

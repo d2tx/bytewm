@@ -166,6 +166,7 @@ static void die(const char *fmt, ...) __attribute__((noreturn));
 static Monitor *dirtomon(int dir);
 static void drawbar(Monitor *m);
 static void drawbars(void);
+static void drawtext(Pixmap pmap, int x, int y, unsigned long fg, unsigned long bg, const char *text, int w);
 static void *ecalloc(size_t nmemb, size_t size);
 static void enternotify(XEvent *e);
 static void expose(XEvent *e);
@@ -541,13 +542,14 @@ void
 detachstack(Client *c)
 {
 	Monitor *mon = c->mon;
-	Client **tp, *t;
+	Client **tp;
 	for (tp = &mon->stack; *tp && *tp != c; tp = &(*tp)->snext);
 	if (*tp)
 		*tp = c->snext;
 	c->snext = NULL;
 
 	if (mon->sel == c) {
+		Client *t;
 		for (t = mon->stack; t && !ISVISIBLE(t, mon->tags); t = t->snext);
 		mon->sel = t;
 	}
@@ -665,8 +667,8 @@ resize(Client *c, int x, int y, int w, int h, int interact)
 		if (c->minh > 0 && h < c->minh) h = c->minh;
 		if (c->maxw > 0 && w > c->maxw) w = c->maxw;
 		if (c->maxh > 0 && h > c->maxh) h = c->maxh;
-		if (c->incw) w -= (w - c->basew) % c->incw;
-		if (c->inch) h -= (h - c->baseh) % c->inch;
+		if (c->incw) w = c->basew + ((w - c->basew) / c->incw) * c->incw;
+		if (c->inch) h = c->baseh + ((h - c->baseh) / c->inch) * c->inch;
 	}
 	resizeclient(c, x, y, w, h);
 }
@@ -765,7 +767,6 @@ tile(Monitor *m, int n)
 void
 bsp_arrange(Node *n, int x, int y, int w, int h, int gx, int goh, int goi)
 {
-	(void)goi;
 	if (!n) return;
 
 	if (n->isleaf && n->client) {
@@ -781,15 +782,15 @@ bsp_arrange(Node *n, int x, int y, int w, int h, int gx, int goh, int goi)
 	if (!n->isleaf && n->a && n->b) {
 		double ratio = n->ratio;
 		if (n->dir == 0) {
-			int sw = MAX(1, (int)((w - gx - 2 * goh) * ratio));
+			int sw = MAX(1, (int)((w - goi - 2 * goh) * ratio));
 			bsp_arrange(n->a, x, y, sw + goh, h, gx, goh, goi);
-			bsp_arrange(n->b, x + sw + gx + goh, y,
-			           MAX(1, w - sw - gx - goh), h, gx, goh, goi);
+			bsp_arrange(n->b, x + sw + goi + goh, y,
+			           MAX(1, w - sw - goi - goh), h, gx, goh, goi);
 		} else {
-			int sh = MAX(1, (int)((h - gx - 2 * goh) * ratio));
+			int sh = MAX(1, (int)((h - goi - 2 * goh) * ratio));
 			bsp_arrange(n->a, x, y, w, sh + goh, gx, goh, goi);
-			bsp_arrange(n->b, x, y + sh + gx + goh, w,
-			           MAX(1, h - sh - gx - goh), gx, goh, goi);
+			bsp_arrange(n->b, x, y + sh + goi + goh, w,
+			           MAX(1, h - sh - goi - goh), gx, goh, goi);
 		}
 	}
 }
@@ -973,6 +974,8 @@ drawbar(Monitor *m)
 		else if (occupied) { fg = tagfg; bg = tagbg; }
 		else           { fg = normfg; bg = normbg; }
 		int tw = textwidth(label) + 4;
+		if (rx + tw > w) tw = w - rx;
+		if (tw <= 0) break;
 		drawtext(pmap, rx, 0, fg, bg, label, tw);
 		rx += tw;
 	}
@@ -1079,6 +1082,7 @@ swallow(Client *c, Client *owner)
 	c->swallowing = owner;
 	XUnmapWindow(dpy, owner->win);
 	XMapWindow(dpy, c->win);
+	arrange(c->mon);
 }
 
 void
@@ -1091,6 +1095,7 @@ unswallow(Client *c)
 	XUnmapWindow(dpy, c->win);
 	XMapWindow(dpy, owner->win);
 	focus(owner, 1);
+	arrange(c->mon);
 }
 
 /* ---- scratchpad ---- */
@@ -1159,7 +1164,6 @@ killclient(const Arg *arg)
 	(void)arg;
 	if (!selmon || !selmon->sel) return;
 	Client *c = selmon->sel;
-	if (!wintoclient(c->win)) return;
 	if (!sendevent(c, wmatom[WMDelete]))
 		XKillClient(dpy, c->win);
 }
@@ -1167,7 +1171,7 @@ killclient(const Arg *arg)
 void
 focusstack(const Arg *arg)
 {
-	if (!selmon->sel) return;
+	if (!selmon || !selmon->sel) return;
 	Client *c, *i;
 
 	if (arg->i > 0) {
@@ -1175,16 +1179,14 @@ focusstack(const Arg *arg)
 		if (!c)
 			for (c = selmon->clients; c && !ISVISIBLE(c, selmon->tags); c = c->next);
 	} else {
-		Client *prev = NULL;
-		for (i = selmon->clients; i && i != selmon->sel; i = i->next)
+		/* find last visible before sel, or wrap to last visible overall */
+		for (c = NULL, i = selmon->clients; i && i != selmon->sel; i = i->next)
 			if (ISVISIBLE(i, selmon->tags))
-				prev = i;
-		c = prev;
-		if (!c) {
-			for (; i; i = i->next)
+				c = i;
+		if (!c)
+			for (i = selmon->sel->next; i; i = i->next)
 				if (ISVISIBLE(i, selmon->tags))
 					c = i;
-		}
 	}
 	if (c) {
 		focus(c, 1);
@@ -1223,7 +1225,7 @@ tag(const Arg *arg)
 void
 toggletag(const Arg *arg)
 {
-	if (!selmon->sel) return;
+	if (!selmon || !selmon->sel) return;
 	unsigned int newtags = selmon->sel->tags ^ (arg->ui & TAGMASK);
 	if (newtags) {
 		selmon->sel->tags = newtags;
@@ -1237,6 +1239,7 @@ void
 view(const Arg *arg)
 {
 	unsigned int tag = arg->ui & TAGMASK;
+	if (!selmon) return;
 	if (tag && tag != selmon->tags) {
 		selmon->oldtags = selmon->tags;
 		selmon->tags = tag;
@@ -1286,13 +1289,14 @@ togglefullscr(const Arg *arg)
 void
 setlayout(const Arg *arg)
 {
-	if (!arg || !arg->v) return;
+	if (!arg || !arg->v || !selmon) return;
 	Layout *lt = (Layout *)arg->v;
 	if (lt == selmon->lt[selmon->layout]) {
 		selmon->layout = (selmon->layout + 1) % 2;
 		selmon->lt[selmon->layout] = lt;
+	} else {
+		selmon->lt[selmon->layout] = lt;
 	}
-	selmon->lt[selmon->layout] = lt;
 	if (lt->arrange)
 		selmon->lt[selmon->layout]->arrange(selmon, countclients(selmon));
 	drawbars();
@@ -1310,11 +1314,25 @@ setmfact(const Arg *arg)
 void
 setcfact(const Arg *arg)
 {
-	if (!selmon->root || selmon->root->isleaf) return;
-	float f = arg->f + selmon->root->ratio;
+	if (!selmon) return;
+	Node *n = (selmon->sel && selmon->sel->node)
+	          ? selmon->sel->node->parent
+	          : NULL;
+	if (!n || n->isleaf) n = selmon->root;
+	if (!n || n->isleaf) return;
+	float f = arg->f + n->ratio;
 	if (f < 0.1 || f > 0.9) return;
-	selmon->root->ratio = f;
-	arrange(selmon);
+	n->ratio = f;
+	/* arrange in-place to preserve modified ratios */
+	XSetErrorHandler(xerrordummy);
+	if (selmon->lt[selmon->layout]->arrange)
+		bsp_arrange(selmon->root, selmon->wx, selmon->wy,
+		            selmon->ww, selmon->wh,
+		            selmon->gappx, selmon->gappoh, selmon->gappoi);
+	restack(selmon);
+	XSync(dpy, False);
+	XSetErrorHandler(xerror);
+	drawbars();
 }
 
 void
@@ -1330,38 +1348,10 @@ tagmon(const Arg *arg)
 	if (!selmon->sel) return;
 	Monitor *m = dirtomon(arg->i);
 	if (m) {
-		Client *c = selmon->sel;
-		/* remove from source monitor's BSP tree */
-		if (c->node) {
-			Node *n = c->node;
-			Node *parent = n->parent;
-			if (parent) {
-				Node *sibling = parent->a == n ? parent->b : parent->a;
-				if (sibling) {
-					sibling->parent = parent->parent;
-					if (parent->a == sibling) parent->a = NULL;
-					else parent->b = NULL;
-				}
-				if (sibling) {
-					if (parent->parent) {
-						if (parent->parent->a == parent)
-							parent->parent->a = sibling;
-						else
-							parent->parent->b = sibling;
-					} else {
-						selmon->root = sibling;
-					}
-				} else {
-					if (selmon->root == parent) selmon->root = NULL;
-				}
-				bspnode_destroy(parent);
-			} else {
-				if (selmon->root == n) selmon->root = NULL;
-				bspnode_destroy(n);
-			}
-		}
-		detach(c);
-		detachstack(c);
+	Client *c = selmon->sel;
+	c->node = NULL;  /* arrange() will rebuild the BSP tree */
+	detach(c);
+	detachstack(c);
 		c->mon = m;
 		attach(c);
 		attachstack(c);
@@ -1445,6 +1435,7 @@ manage(Window w, XWindowAttributes *wa)
 	if (XGetClassHint(dpy, w, &ch)) {
 		if ((ch.res_class && strcmp(ch.res_class, "scratchpad") == 0)
 		    || (ch.res_name && strcmp(ch.res_name, "scratchpad") == 0)) {
+			if (scratchpad) XUnmapWindow(dpy, scratchpad->win);
 			scratchpad = c;
 			scratchpad->tags = 0;
 			scratchpad->isfloating = 1;
@@ -1474,7 +1465,6 @@ manage(Window w, XWindowAttributes *wa)
 	XSync(dpy, False);
 	if (c->mon == selmon && ISVISIBLE(c, selmon->tags)) {
 		focus(c, 1);
-		selmon->sel = c;
 	}
 	arrange(c->mon);
 	drawbars();
@@ -1492,6 +1482,22 @@ unmanage(Client *c, int destroyed)
 		PropModePrepend, (unsigned char *)&(Window){0}, 0);
 	detach(c);
 	detachstack(c);
+
+	/* rebuild client list after removing this window */
+	{
+		int n = 0;
+		for (Monitor *om = mons; om; om = om->next)
+			for (Client *walk = om->clients; walk; walk = walk->next)
+				n++;
+		Window *wins = ecalloc(n, sizeof(Window));
+		int i = 0;
+		for (Monitor *om = mons; om; om = om->next)
+			for (Client *walk = om->clients; walk; walk = walk->next)
+				wins[i++] = walk->win;
+		XChangeProperty(dpy, root, netatom[NetClientList], XA_WINDOW, 32,
+			PropModeReplace, (unsigned char *)wins, n);
+		free(wins);
+	}
 
 	/* remove from bsp tree */
 	if (c->node) {
@@ -1912,6 +1918,7 @@ updategeom(void)
 	createmon(0, 0, 0, sw, sh);
 
 	if (!selmon) selmon = mons;
+	selmon = mons;  /* unconditionally update after freeing old monitors */
 
 	/* reassign clients */
 	for (Client *c = allclients; c; ) {
