@@ -212,6 +212,7 @@ static void sigchld(int unused);
 static void sighup(int unused);
 static void spawn(const Arg *arg);
 static void swallow(Client *c, Client *owner);
+static void swapclients(const Arg *arg);
 static unsigned int textwidth(const char *s);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
@@ -1209,6 +1210,36 @@ zoom(const Arg *arg)
 	selmon->clients = c;
 	focus(c, 1);
 	arrange(selmon);
+}
+
+void
+swapclients(const Arg *arg)
+{
+	if (!selmon || !selmon->sel) return;
+	Client *c = selmon->sel;
+	Client **where = NULL;
+
+	if (arg->i > 0) {
+		/* find position after the next visible client */
+		Client *n;
+		for (n = c->next; n && !ISVISIBLE(n, selmon->tags); n = n->next);
+		if (!n) return;
+		where = &n->next;
+	} else {
+		/* find position of the previous visible client */
+		Client *p, *prev = NULL;
+		for (p = selmon->clients; p && p != c; p = p->next)
+			if (ISVISIBLE(p, selmon->tags))
+				prev = p;
+		if (!prev) return;
+		for (where = &selmon->clients; *where && *where != prev; where = &(*where)->next);
+	}
+
+	detach(c);
+	c->next = *where;
+	*where = c;
+	arrange(selmon);
+	drawbars();
 }
 
 void
