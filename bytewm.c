@@ -7,7 +7,6 @@
  *  - master-stack and binary tree (bsp) tiling layouts
  *  - configurable gaps
  *  - scratchpad (dropdown terminal)
- *  - window swallow (terminal replaced by launched GUI app)
  *  - multi-tag workspaces
  *  - gruvbox dark color scheme
  *  - core X11 bitmap fonts (retro)
@@ -90,7 +89,6 @@ typedef struct {
 	const char *title;
 	unsigned int tags;
 	int isfloating;
-	int isterminal;
 } Rule;
 
 typedef struct Client {
@@ -102,11 +100,10 @@ typedef struct Client {
 	int basew, baseh, incw, inch, maxw, maxh, minw, minh;
 	int bw, oldbw;
 	unsigned int tags;
-	int isfixed, isfloating, isurgent, isfullscreen, isterminal;
+	int isfixed, isfloating, isurgent, isfullscreen;
 	int neverfocus;
 	int oldstate;
 	pid_t pid;
-	struct Client *swallowing;
 	struct Node *node;
 	struct Monitor *mon;
 } Client;
@@ -211,7 +208,6 @@ static void showhide(Client *c);
 static void sigchld(int unused);
 static void sighup(int unused);
 static void spawn(const Arg *arg);
-static void swallow(Client *c, Client *owner);
 static void swapclients(const Arg *arg);
 static unsigned int textwidth(const char *s);
 static void tag(const Arg *arg);
@@ -227,7 +223,6 @@ static void toggletag(const Arg *arg);
 static void togglescratch(const Arg *arg);
 static void unmanage(Client *c, int destroyed);
 static void unmapnotify(XEvent *e);
-static void unswallow(Client *c);
 static void updatebars(void);
 static void updategeom(void);
 static void updatenumlockmask(void);
@@ -606,14 +601,12 @@ applyrules(Client *c)
 		cls = ch.res_class;
 		inst = ch.res_name;
 	}
-	c->isterminal = 0;
 	for (int i = 0; i < LENGTH(rules); i++) {
 		if ((!rules[i].title || wintitlematch(c, rules[i].title))
 		    && (!rules[i].class || (cls && !strcmp(rules[i].class, cls)))
 		    && (!rules[i].instance || (inst && !strcmp(rules[i].instance, inst)))) {
 			c->isfloating = rules[i].isfloating;
 			c->tags |= rules[i].tags;
-			c->isterminal = rules[i].isterminal;
 		}
 	}
 	if (cls) XFree(ch.res_class);
@@ -1077,32 +1070,6 @@ updatebars(void)
 	}
 }
 
-/* ---- window swallow ---- */
-
-void
-swallow(Client *c, Client *owner)
-{
-	if (c->swallowing || owner->swallowing) return;
-	owner->swallowing = c;
-	c->swallowing = owner;
-	XUnmapWindow(dpy, owner->win);
-	XMapWindow(dpy, c->win);
-	arrange(c->mon);
-}
-
-void
-unswallow(Client *c)
-{
-	if (!c->swallowing) return;
-	Client *owner = c->swallowing;
-	owner->swallowing = NULL;
-	c->swallowing = NULL;
-	XUnmapWindow(dpy, c->win);
-	XMapWindow(dpy, owner->win);
-	focus(owner, 1);
-	arrange(c->mon);
-}
-
 /* ---- scratchpad ---- */
 
 static Client *scratchpad = NULL;
@@ -1424,8 +1391,6 @@ manage(Window w, XWindowAttributes *wa)
 	c->bw = borderpx;
 	c->mon = selmon;
 	c->node = NULL;
-	c->swallowing = NULL;
-	c->isterminal = 0;
 	c->isfloating = 0;
 
 	updatesizehints(c);
@@ -1497,14 +1462,6 @@ manage(Window w, XWindowAttributes *wa)
 		if (ch.res_name) XFree(ch.res_name);
 	}
 
-	/* swallow check */
-	if (!c->isfloating || swallowfloating) {
-		for (Monitor *m = mons; m; m = m->next)
-			for (Client *owner = m->stack; owner && owner != c; owner = owner->snext)
-				if (owner->isterminal && owner->pid == c->pid)
-					swallow(c, owner);
-	}
-
 	/* set border and map before arranging so XRaiseWindow works */
 	setborder(c, c->mon == selmon && ISVISIBLE(c, selmon->tags));
 	XMapWindow(dpy, w);
@@ -1522,7 +1479,6 @@ unmanage(Client *c, int destroyed)
 	Monitor *m = c->mon;
 
 	if (c == scratchpad) scratchpad = NULL;
-	if (c->swallowing) unswallow(c);
 
 	XChangeProperty(dpy, root, netatom[NetClientList], XA_WINDOW, 32,
 		PropModePrepend, (unsigned char *)&(Window){0}, 0);
@@ -2257,7 +2213,6 @@ cleanup(void)
 		while (m->clients) {
 			Client *c = m->clients;
 			m->clients = c->next;
-			if (c->swallowing) unswallow(c);
 			XDestroyWindow(dpy, c->win);
 			free(c);
 		}

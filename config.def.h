@@ -40,8 +40,8 @@ static const int swallowfloating = 0;  /* 1 = swallow even floating terminals */
 static const char *tags[] = { "I", "II", "III", "IV", "V" };
 
 static const Rule rules[] = {
-	{ "st",          NULL,       NULL,        0,         0,          1 },
-	{ "st-256color", NULL,       NULL,        0,         0,          1 },
+	{ "st",          NULL,       NULL,        0,         0 },
+	{ "st-256color", NULL,       NULL,        0,         0 },
 };
 
 static const float mfact     = 0.55;
