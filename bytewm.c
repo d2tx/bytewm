@@ -510,6 +510,7 @@ focus(Client *c, int raise)
 	if (raise) {
 		grabbuttons(c, 1);
 		XRaiseWindow(dpy, c->win);
+		restack(m);
 	}
 	setfocus(c);
 }
@@ -686,6 +687,9 @@ restack(Monitor *m)
 			if (ISVISIBLE(c, m->tags) && c != m->sel)
 				XConfigureWindow(dpy, c->win, CWSibling|CWStackMode, &wc);
 	}
+	for (Client *c = m->stack; c; c = c->snext)
+		if (ISVISIBLE(c, m->tags) && c != m->sel && c->isfloating)
+			XRaiseWindow(dpy, c->win);
 }
 
 void
