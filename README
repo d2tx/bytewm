@@ -23,7 +23,6 @@ KEYBINDINGS
 
   Super+j / k          Focus next/prev window
   Super+i / d          Increase/decrease master count
-  Super+h / l          Shrink/grow master area
   Super+h / l          Shrink/grow master area (tile layout)
   Super+Ctrl+h / g     Shrink/grow client (BSP layout)
   Super+z              Zoom (focus master window)
