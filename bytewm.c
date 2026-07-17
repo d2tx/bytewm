@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 /* See LICENSE file for copyright and license details.
- * bytewm - a retro, gruvbox-themed tiling window manager for X11
+ * bytewm - a minimal, gruvbox-themed tiling window manager for X11
  *
  * features:
  *  - master-stack and binary tree (bsp) tiling layouts
