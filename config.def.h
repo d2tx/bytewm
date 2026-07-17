@@ -80,6 +80,7 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_d,      incnmaster,     {.i = -1 } },
 	{ MODKEY,                       XK_h,      setmfact,       {.f = -0.05 } },
 	{ MODKEY,                       XK_l,      setmfact,       {.f = +0.05 } },
+	{ MODKEY,                       XK_g,      setmfact,       {.f = +0.05 } },
 	{ MODKEY|ControlMask,          XK_h,      setcfact,       {.f = -0.05 } },
 	{ MODKEY|ControlMask,          XK_g,      setcfact,       {.f = +0.05 } },
 
