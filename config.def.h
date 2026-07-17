@@ -58,6 +58,7 @@ static const char *termcmd[]  = { "st", NULL };
 static const char *menucmd[]  = { "bytelaunch", NULL };
 static const char *snapcmd[]  = { "bytesnap", NULL };
 static const char *pickcmd[]  = { "bytepick", NULL };
+static const char *menucmd2[] = { "bytemenu", NULL };
 static const char *lockcmd[]  = { "bytelock", NULL };
 
 static const char *scratchpadcmd[] = { "st", "-t", "scratchpad", "-c", "scratchpad", NULL };
@@ -68,6 +69,7 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_Return, togglescratch,  {.v = NULL } },
 	{ MODKEY,                       XK_s,      spawn,          {.v = snapcmd } },
 	{ MODKEY,                       XK_c,      spawn,          {.v = pickcmd } },
+	{ MODKEY|ShiftMask,             XK_m,      spawn,          {.v = menucmd2 } },
 	{ MODKEY|ControlMask,           XK_l,      spawn,          {.v = lockcmd } },
 
 	{ MODKEY,                       XK_j,      focusstack,     {.i = +1 } },

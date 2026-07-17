@@ -1,7 +1,7 @@
 # bytewm - retro tiling window manager
 include config.mk
 
-APPBINS = bytify bytelaunch bytesnap bytevol bytewm-exit bytekill bytelock bytepass bytefetch bytepick
+APPBINS = bytify bytelaunch bytesnap bytevol bytewm-exit bytekill bytelock bytepass bytefetch bytepick bytemenu
 
 all: bytewm apps bytewdm bytekill bytelock bytepass bytefetch bytepick
 
