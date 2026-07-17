@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 static int
 bitpos(unsigned long mask)
@@ -91,6 +92,13 @@ main(void)
 	fclose(fp);
 	XDestroyImage(img);
 	XCloseDisplay(dpy);
+
+	/* notify bytify */
+	int fd = open("/tmp/bytify.fifo", O_WRONLY | O_NONBLOCK);
+	if (fd >= 0) {
+		dprintf(fd, "screenshot saved");
+		close(fd);
+	}
 
 	printf("%s\n", fullpath);
 	return 0;
