@@ -81,7 +81,7 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_h,      setmfact,       {.f = -0.05 } },
 	{ MODKEY,                       XK_l,      setmfact,       {.f = +0.05 } },
 	{ MODKEY|ControlMask,          XK_h,      setcfact,       {.f = -0.05 } },
-	{ MODKEY|ControlMask,          XK_l,      setcfact,       {.f = +0.05 } },
+	{ MODKEY|ControlMask,          XK_g,      setcfact,       {.f = +0.05 } },
 
 	{ MODKEY,                       XK_z,      zoom,           {.v = NULL } },
 	{ MODKEY,                       XK_Left,   movearrow,      {.i = 0 } },
