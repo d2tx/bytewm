@@ -52,6 +52,7 @@ KEYBINDINGS
   Super+, / .          Previous/next monitor
   Super+Ctrl+L         Lock screen (bytelock)
   Super+Shift+q        Quit (bytewm-exit)
+  Super+Shift+r        Restart bytewm (reload config)
 
 MOUSE
   Super+LeftClick     Move window (tiled → floating + move)
@@ -72,6 +73,33 @@ AUTOSTART
 STATUS BAR
   Place ~/.config/bytewm/status.sh to show custom status text.
   Output one line to stdout (CPU, RAM, time, etc.).
+
+RUNTIME CONFIG
+  Visual settings can be changed without recompiling via
+  ~/.config/bytewm/config (auto-generated on first run):
+
+    font             Bar font (e.g. "fixed", "monospace:size=10")
+    color.normfg     Bar text color (fg on bar)
+    color.normbg     Bar background color
+    color.selfg      Selected tag text color
+    color.selbg      Selected tag background color
+    color.tagfg      Occupied tag text color
+    color.tagbg      Occupied tag background color
+    color.urgfg      Urgent tag text color
+    color.urgbg      Urgent tag background color
+    color.unfgborder Unfocused window border color
+    barheight        Bar height in pixels
+    borderpx         Window border width
+    gappx            Gap between windows
+    gappoh           Outer horizontal gap
+    gappoi           Inner horizontal gap
+    showbar          1 = show bar, 0 = hide
+    topbar           1 = top, 0 = bottom
+
+  After editing, press Super+Shift+r to apply changes instantly.
+
+  Keybindings, commands, tags, rules, and layout settings still
+  require editing config.h and recompiling.
 
 THEMING
   A full Gruvbox GTK theme is included in themes/bytewm-gruvbox/.
@@ -147,8 +175,8 @@ APPS
 
 FILES
   bytewm.c       Main source
-  config.h       Compiled configuration
-  config.def.h   Default configuration template
+  config.h       Compiled configuration (keybindings, rules, commands)
+  ~/.config/bytewm/config   Runtime config (colors, font, gaps, bar)
   Makefile       Build system
   apps/          Companion apps:
                     bytelaunch  - dmenu-style app launcher
