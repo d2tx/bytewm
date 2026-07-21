@@ -1,11 +1,12 @@
 #!/bin/sh
 # bytewm status bar - cpu, mem, temp, time
 
-cpu=$(top -bn1 2>/dev/null | awk '/^%Cpu/ {printf "%d", int(100-$8)}')
+cpu=$(awk '/^cpu /{printf "%d", (($2+$4)*100/($2+$4+$5))}' /proc/stat)
 [ -z "$cpu" ] && cpu=0
 
-mem_total=$(free -m 2>/dev/null | awk '/^Mem:/ {print $2}')
-mem_used=$(free -m 2>/dev/null | awk '/^Mem:/ {print $3}')
+mem=$(free -m 2>/dev/null | awk '/^Mem:/ {print $2, $3}')
+mem_total=${mem%% *}
+mem_used=${mem##* }
 [ -z "$mem_used" ] && mem_used=0 && mem_total=0
 
 temp=$(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | head -1)
