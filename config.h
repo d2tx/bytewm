@@ -115,6 +115,7 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_period, tagmon,         {.i = +1 } },
 
 	{ MODKEY|ShiftMask,             XK_q,      spawn,          {.v = (char *[]){"bytewm-exit", NULL} } },
+	{ MODKEY|ShiftMask,             XK_r,      spawn,          {.v = (char *[]){"pkill", "-HUP", "bytewm", NULL} } },
 
 	TAGKEYS(                        XK_1,                      0)
 	TAGKEYS(                        XK_2,                      1)
