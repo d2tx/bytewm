@@ -1,33 +1,33 @@
-/* gruvbox dark theme */
-static const char col_bg[]       = "#282828";
-static const char col_fg[]       = "#ebdbb2";
-static const char col_black[]    = "#1d2021";
-static const char col_red[]      = "#cc241d";
-static const char col_green[]    = "#98971a";
-static const char col_yellow[]   = "#d79921";
-static const char col_blue[]     = "#458588";
-static const char col_purple[]   = "#b16286";
-static const char col_aqua[]     = "#689d6a";
-static const char col_orange[]   = "#d65d0e";
-static const char col_gray[]     = "#a89984";
-static const char col_dimbg[]    = "#3c3836";
+/* gruvbox dark theme (overridable via ~/.config/bytewm/config) */
+static char col_bg[16]       = "#282828";
+static char col_fg[16]       = "#ebdbb2";
+static char col_black[16]    = "#1d2021";
+static char col_red[16]      = "#cc241d";
+static char col_green[16]    = "#98971a";
+static char col_yellow[16]   = "#d79921";
+static char col_blue[16]     = "#458588";
+static char col_purple[16]   = "#b16286";
+static char col_aqua[16]     = "#689d6a";
+static char col_orange[16]   = "#d65d0e";
+static char col_gray[16]     = "#a89984";
+static char col_dimbg[16]    = "#3c3836";
 
-static const char *colors[][2] = {
+static char *colors[SchemeLast][2] = {
 	[SchemeNorm] = { col_fg, col_bg },
 	[SchemeSel]  = { col_bg, col_aqua },
 	[SchemeTag]  = { col_orange, col_bg },
 	[SchemeUrg]  = { col_bg, col_red },
 };
 
-static const char *font = "fixed";
+static char font[64] = "fixed";
 
-static const unsigned int borderpx  = 6;
-static const unsigned int gappx     = 6;
-static const unsigned int gappoh    = 6;
-static const unsigned int gappoi    = 6;
-static const unsigned int barheight = 20;
-static int               showbar    = 1;
-static const int         topbar     = 1;
+static unsigned int borderpx  = 6;
+static unsigned int gappx     = 6;
+static unsigned int gappoh    = 6;
+static unsigned int gappoi    = 6;
+static unsigned int barheight = 20;
+static int            showbar  = 1;
+static int            topbar   = 1;
 
 static const int swallowfloating = 0;  /* 1 = swallow even floating terminals */
 

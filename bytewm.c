@@ -2103,11 +2103,139 @@ sighup(int unused)
 	running = 0;
 }
 
+static char *trim(char *s)
+{
+	while (*s == ' ' || *s == '\t') s++;
+	char *end = s + strlen(s) - 1;
+	while (end > s && (*end == ' ' || *end == '\t' || *end == '\n')) end--;
+	*(end + 1) = '\0';
+	return s;
+}
+
+static void strip_comment(char *s)
+{
+	char *p = strchr(s, '#');
+	if (p) *p = '\0';
+}
+
+static char *config_path(char *buf, size_t size, const char *file)
+{
+	char *home = getenv("HOME");
+	if (!home) home = "/tmp";
+	snprintf(buf, size, "%s/.config/bytewm/%s", home, file);
+	return buf;
+}
+
+static void config_parse(void)
+{
+	char path[512];
+	config_path(path, sizeof(path), "config");
+
+	/* generate default if missing */
+	struct stat st;
+	if (stat(path, &st) != 0) {
+		FILE *def = fopen(path, "w");
+		if (def) {
+			fprintf(def,
+				"# bytewm config\n"
+				"color.normfg = %s\n"
+				"color.normbg = %s\n"
+				"color.selfg = %s\n"
+				"color.selbg = %s\n"
+				"color.tagfg = %s\n"
+				"color.tagbg = %s\n"
+				"color.urgfg = %s\n"
+				"color.urgbg = %s\n"
+				"color.unfgborder = %s\n"
+				"font = %s\n"
+				"barheight = %u\n"
+				"borderpx = %u\n"
+				"gappx = %u\n"
+				"gappoh = %u\n"
+				"gappoi = %u\n"
+				"showbar = %d\n"
+				"topbar = %d\n",
+				colors[SchemeNorm][ColFG],
+				colors[SchemeNorm][ColBG],
+				colors[SchemeSel][ColFG],
+				colors[SchemeSel][ColBG],
+				colors[SchemeTag][ColFG],
+				colors[SchemeTag][ColBG],
+				colors[SchemeUrg][ColFG],
+				colors[SchemeUrg][ColBG],
+				col_dimbg,
+				font,
+				barheight,
+				borderpx,
+				gappx,
+				gappoh,
+				gappoi,
+				showbar,
+				topbar);
+			fclose(def);
+		}
+		return;
+	}
+
+	FILE *fp = fopen(path, "r");
+	if (!fp) return;
+
+	char line[256];
+	while (fgets(line, sizeof(line), fp)) {
+		strip_comment(line);
+		char *eq = strchr(line, '=');
+		if (!eq) continue;
+		*eq = '\0';
+		char *key = trim(line);
+		char *val = trim(eq + 1);
+		if (!*key || !*val) continue;
+
+		if (!strcmp(key, "font")) {
+			strncpy(font, val, sizeof(font) - 1);
+		} else if (!strcmp(key, "color.normfg")) {
+			strncpy(colors[SchemeNorm][ColFG], val, 15);
+		} else if (!strcmp(key, "color.normbg")) {
+			strncpy(colors[SchemeNorm][ColBG], val, 15);
+		} else if (!strcmp(key, "color.selfg")) {
+			strncpy(colors[SchemeSel][ColFG], val, 15);
+		} else if (!strcmp(key, "color.selbg")) {
+			strncpy(colors[SchemeSel][ColBG], val, 15);
+		} else if (!strcmp(key, "color.tagfg")) {
+			strncpy(colors[SchemeTag][ColFG], val, 15);
+		} else if (!strcmp(key, "color.tagbg")) {
+			strncpy(colors[SchemeTag][ColBG], val, 15);
+		} else if (!strcmp(key, "color.urgfg")) {
+			strncpy(colors[SchemeUrg][ColFG], val, 15);
+		} else if (!strcmp(key, "color.urgbg")) {
+			strncpy(colors[SchemeUrg][ColBG], val, 15);
+		} else if (!strcmp(key, "color.unfgborder")) {
+			strncpy(col_dimbg, val, 15);
+		} else if (!strcmp(key, "barheight")) {
+			barheight = (unsigned int)atoi(val);
+		} else if (!strcmp(key, "borderpx")) {
+			borderpx = (unsigned int)atoi(val);
+		} else if (!strcmp(key, "gappx")) {
+			gappx = (unsigned int)atoi(val);
+		} else if (!strcmp(key, "gappoh")) {
+			gappoh = (unsigned int)atoi(val);
+		} else if (!strcmp(key, "gappoi")) {
+			gappoi = (unsigned int)atoi(val);
+		} else if (!strcmp(key, "showbar")) {
+			showbar = atoi(val);
+		} else if (!strcmp(key, "topbar")) {
+			topbar = atoi(val);
+		}
+	}
+	fclose(fp);
+}
+
 void
-setup(void)
+	setup(void)
 {
 	sw = DisplayWidth(dpy, screen);
 	sh = DisplayHeight(dpy, screen);
+
+	config_parse();
 
 	initfont();
 
