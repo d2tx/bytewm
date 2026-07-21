@@ -19,6 +19,7 @@
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
 #include <X11/cursorfont.h>
+#include <X11/Xft/Xft.h>
 #include <errno.h>
 #include <execinfo.h>
 #include <fcntl.h>
@@ -163,7 +164,7 @@ static void die(const char *fmt, ...) __attribute__((noreturn));
 static Monitor *dirtomon(int dir);
 static void drawbar(Monitor *m);
 static void drawbars(void);
-static void drawtext(Pixmap pmap, int x, int y, unsigned long fg, unsigned long bg, const char *text, int w);
+static void drawtext(Pixmap pmap, int x, int y, XftColor *fg, unsigned long bg, const char *text, int w);
 static void *ecalloc(size_t nmemb, size_t size);
 static void enternotify(XEvent *e);
 static void expose(XEvent *e);
@@ -247,9 +248,12 @@ unsigned int numlockmask = 0;
 int (*xerrorxlib)(Display *, XErrorEvent *);
 volatile sig_atomic_t running = 1;
 static volatile sig_atomic_t restart = 0;
+XftFont *xfont;
+XFontStruct *xfont_core;
+int xft_font;  /* 1 = using Xft, 0 = using core X11 font */
 
-XFontStruct *xfont;
 unsigned long normfg, normbg, selfg, selbg, tagfg, tagbg, urgfg, urgbg, unfgborder;
+XftColor xft_normfg, xft_selfg, xft_tagfg, xft_urgfg;
 GC bargc;
 static char status[512] = "";
 
@@ -901,16 +905,34 @@ bspnode_destroy(Node *n)
 unsigned int
 textwidth(const char *s)
 {
-	if (!xfont || !s || !*s) return 0;
-	return XTextWidth(xfont, s, strlen(s));
+	if (!s || !*s) return 0;
+	if (xft_font) {
+		if (!xfont) return 0;
+		XGlyphInfo ext;
+		XftTextExtentsUtf8(dpy, xfont, (XftChar8 *)s, (int)strlen(s), &ext);
+		return (unsigned int)ext.xOff;
+	} else {
+		if (!xfont_core) return 0;
+		return XTextWidth(xfont_core, s, (int)strlen(s));
+	}
 }
 
 void
 initfont(void)
 {
-	if (!(xfont = XLoadQueryFont(dpy, font)))
-		die("bytewm: could not load font '%s'\n", font);
-	bh = MAX(barheight, xfont->ascent + xfont->descent + 4);
+	xfont_core = XLoadQueryFont(dpy, font);
+	if (xfont_core) {
+		xft_font = 0;
+		bh = MAX(barheight, (unsigned int)(xfont_core->ascent + xfont_core->descent + 4));
+		return;
+	}
+	xfont = XftFontOpenName(dpy, screen, font);
+	if (xfont) {
+		xft_font = 1;
+		bh = MAX(barheight, (unsigned int)(xfont->ascent + xfont->descent + 4));
+		return;
+	}
+	die("bytewm: could not load font '%s'\n", font);
 }
 
 unsigned long
@@ -926,14 +948,27 @@ getcolor(const char *colstr)
 }
 
 void
-drawtext(Pixmap pmap, int x, int y, unsigned long fg, unsigned long bg, const char *text, int w)
+drawtext(Pixmap pmap, int x, int y, XftColor *fg, unsigned long bg, const char *text, int w)
 {
 	XSetForeground(dpy, bargc, bg);
 	XFillRectangle(dpy, pmap, bargc, x, y, w, bh);
-	XSetForeground(dpy, bargc, fg);
+
 	int tx = x + 2;
-	int ty = y + (bh - (xfont->ascent + xfont->descent)) / 2 + xfont->ascent;
-	XDrawString(dpy, pmap, bargc, tx, ty, text, (int)strnlen(text, 256));
+	if (xft_font && xfont) {
+		XftDraw *xftdraw = XftDrawCreate(dpy, pmap,
+			DefaultVisual(dpy, screen), DefaultColormap(dpy, screen));
+		if (xftdraw) {
+			int ty = y + (bh - (xfont->ascent + xfont->descent)) / 2 + xfont->ascent;
+			XftDrawStringUtf8(xftdraw, fg, xfont, tx, ty,
+				(XftChar8 *)text, (int)strnlen(text, 256));
+			XftDrawDestroy(xftdraw);
+		}
+	} else if (xfont_core) {
+		XSetFont(dpy, bargc, xfont_core->fid);
+		XSetForeground(dpy, bargc, fg->pixel);
+		int ty = y + (bh - (xfont_core->ascent + xfont_core->descent)) / 2 + xfont_core->ascent;
+		XDrawString(dpy, pmap, bargc, tx, ty, text, (int)strnlen(text, 256));
+	}
 }
 
 void
@@ -966,11 +1001,12 @@ drawbar(Monitor *m)
 			snprintf(label, sizeof(label), "[%s]", tags[i]);
 		else
 			snprintf(label, sizeof(label), " %s ", tags[i]);
-		unsigned long fg, bg;
-		if (sel)       { fg = selfg;  bg = selbg; }
-		else if (urgent) { fg = urgfg; bg = urgbg; }
-		else if (occupied) { fg = tagfg; bg = tagbg; }
-		else           { fg = normfg; bg = normbg; }
+		unsigned long bg;
+		XftColor *fg;
+		if (sel)       { fg = &xft_selfg;  bg = selbg; }
+		else if (urgent) { fg = &xft_urgfg; bg = urgbg; }
+		else if (occupied) { fg = &xft_tagfg; bg = tagbg; }
+		else           { fg = &xft_normfg; bg = normbg; }
 		int tw = textwidth(label) + 4;
 		if (rx + tw > w) tw = w - rx;
 		if (tw <= 0) break;
@@ -980,7 +1016,7 @@ drawbar(Monitor *m)
 
 	/* separator */
 	{
-		drawtext(pmap, rx, 0, tagfg, normbg, " | ", 14);
+		drawtext(pmap, rx, 0, &xft_tagfg, normbg, " | ", 14);
 		rx += 14;
 	}
 
@@ -988,13 +1024,13 @@ drawbar(Monitor *m)
 	{
 		const char *sym = m->lt[m->layout]->name;
 		int lw = textwidth(sym) + 8;
-		drawtext(pmap, rx, 0, tagfg, normbg, sym, lw);
+		drawtext(pmap, rx, 0, &xft_tagfg, normbg, sym, lw);
 		rx += lw;
 	}
 
 	/* separator */
 	{
-		drawtext(pmap, rx, 0, tagfg, normbg, " | ", 14);
+		drawtext(pmap, rx, 0, &xft_tagfg, normbg, " | ", 14);
 		rx += 14;
 	}
 
@@ -1003,7 +1039,7 @@ drawbar(Monitor *m)
 		char winname[256];
 		if (gettextprop(m->sel->win, netatom[NetWMName], winname, sizeof(winname))) {
 			int tw = MAX(w - rx, 0);
-			drawtext(pmap, rx, 0, normfg, normbg, winname, tw);
+			drawtext(pmap, rx, 0, &xft_normfg, normbg, winname, tw);
 		}
 	}
 
@@ -1024,11 +1060,11 @@ drawbar(Monitor *m)
 			char saved = p[seg_len];
 			p[seg_len] = '\0';
 			int tw = textwidth(p);
-			drawtext(pmap, pos, 0, normfg, normbg, p, tw + 4);
+			drawtext(pmap, pos, 0, &xft_normfg, normbg, p, tw + 4);
 			pos += tw + 2;
 			p[seg_len] = saved;
 			if (!sep) break;
-			drawtext(pmap, pos, 0, tagfg, normbg, " | ", sepw);
+			drawtext(pmap, pos, 0, &xft_tagfg, normbg, " | ", sepw);
 			pos += sepw;
 			p = sep + 3;
 		}
@@ -2252,6 +2288,19 @@ void
 	urgbg  = getcolor(colors[SchemeUrg][ColBG]);
 	unfgborder = getcolor(col_dimbg);
 
+	{
+		Visual *vis = DefaultVisual(dpy, screen);
+		Colormap cmap = DefaultColormap(dpy, screen);
+		XftColorAllocName(dpy, vis, cmap,
+			colors[SchemeNorm][ColFG], &xft_normfg);
+		XftColorAllocName(dpy, vis, cmap,
+			colors[SchemeSel][ColFG], &xft_selfg);
+		XftColorAllocName(dpy, vis, cmap,
+			colors[SchemeTag][ColFG], &xft_tagfg);
+		XftColorAllocName(dpy, vis, cmap,
+			colors[SchemeUrg][ColFG], &xft_urgfg);
+	}
+
 	/* atoms */
 	netatom[NetSupported]     = getatom("_NET_SUPPORTED");
 	netatom[NetWMName]        = getatom("_NET_WM_NAME");
@@ -2356,7 +2405,18 @@ cleanup(void)
 		if (m->root) bspnode_destroy(m->root);
 		free(m);
 	}
-	XFreeFont(dpy, xfont);
+	if (xfont_core)
+		XFreeFont(dpy, xfont_core);
+	if (xfont)
+		XftFontClose(dpy, xfont);
+	XftColorFree(dpy, DefaultVisual(dpy, screen),
+		DefaultColormap(dpy, screen), &xft_normfg);
+	XftColorFree(dpy, DefaultVisual(dpy, screen),
+		DefaultColormap(dpy, screen), &xft_selfg);
+	XftColorFree(dpy, DefaultVisual(dpy, screen),
+		DefaultColormap(dpy, screen), &xft_tagfg);
+	XftColorFree(dpy, DefaultVisual(dpy, screen),
+		DefaultColormap(dpy, screen), &xft_urgfg);
 	XFreeGC(dpy, bargc);
 	XUngrabKey(dpy, AnyKey, AnyModifier, root);
 	XFreeCursor(dpy, cursor[CurNormal]);

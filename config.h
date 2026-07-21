@@ -19,7 +19,7 @@ static char *colors[SchemeLast][2] = {
 	[SchemeUrg]  = { col_bg, col_red },
 };
 
-static char font[64] = "fixed";
+static char font[64] = "monospace:size=10";
 
 static unsigned int borderpx  = 6;
 static unsigned int gappx     = 6;
