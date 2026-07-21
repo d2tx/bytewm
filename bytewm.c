@@ -1086,11 +1086,14 @@ scratchpadshow(void)
 		drawbars();
 		return;
 	}
-	if (fork() == 0) {
+	pid_t pid = fork();
+	if (pid == 0) {
 		if (dpy) close(ConnectionNumber(dpy));
 		setsid();
 		execvp(((char **)scratchpadcmd)[0], (char **)scratchpadcmd);
 		_exit(1);
+	} else if (pid < 0) {
+		fprintf(stderr, "bytewm: fork failed: %s\n", strerror(errno));
 	}
 }
 
@@ -1120,13 +1123,16 @@ togglescratch(const Arg *arg)
 void
 spawn(const Arg *arg)
 {
-	if (fork() == 0) {
+	pid_t pid = fork();
+	if (pid == 0) {
 		if (dpy) close(ConnectionNumber(dpy));
 		setsid();
 		execvp(((char **)arg->v)[0], (char **)arg->v);
 		fprintf(stderr, "bytewm: execvp %s failed: %s\n",
 			((char **)arg->v)[0], strerror(errno));
 		_exit(1);
+	} else if (pid < 0) {
+		fprintf(stderr, "bytewm: fork failed: %s\n", strerror(errno));
 	}
 }
 
@@ -1976,11 +1982,14 @@ autostart(void)
 
 	struct stat st;
 	if (stat(path, &st) == 0 && (st.st_mode & S_IXUSR)) {
-		if (fork() == 0) {
+		pid_t pid = fork();
+		if (pid == 0) {
 			if (dpy) close(ConnectionNumber(dpy));
 			setsid();
 			execl("/bin/sh", "sh", path, NULL);
 			_exit(1);
+		} else if (pid < 0) {
+			fprintf(stderr, "bytewm: fork failed: %s\n", strerror(errno));
 		}
 	}
 }
@@ -2157,7 +2166,6 @@ setup(void)
 void
 run(void)
 {
-	signal(SIGCHLD, sigchld);
 	signal(SIGHUP, sighup);
 	signal(SIGSEGV, sigsegv);
 	signal(SIGABRT, sigsegv);
@@ -2241,6 +2249,14 @@ main(int argc, char *argv[])
 
 	screen = DefaultScreen(dpy);
 	root = RootWindow(dpy, screen);
+
+	{
+		struct sigaction sa = {0};
+		sa.sa_handler = sigchld;
+		sigemptyset(&sa.sa_mask);
+		sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+		sigaction(SIGCHLD, &sa, NULL);
+	}
 
 	checkotherwm();
 	setup();
