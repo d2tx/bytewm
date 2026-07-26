@@ -111,17 +111,17 @@ QEOF
 
 	# env var: bash
 	if ! grep -q 'QT_QPA_PLATFORMTHEME' "$HOME/.bash_profile" 2>/dev/null; then
-		echo 'export QT_QPA_PLATFORMTHEME=qt5ct:qt6ct' >> "$HOME/.bash_profile"
+		echo 'export QT_QPA_PLATFORMTHEME=qt5ct' >> "$HOME/.bash_profile"
 	fi
 
 	# env var: fish
 	if [ -f "$HOME/.config/fish/config.fish" ]; then
 		if ! grep -q 'QT_QPA_PLATFORMTHEME' "$HOME/.config/fish/config.fish" 2>/dev/null; then
-			echo 'set -gx QT_QPA_PLATFORMTHEME qt5ct:qt6ct' >> "$HOME/.config/fish/config.fish"
+			echo 'set -gx QT_QPA_PLATFORMTHEME qt5ct' >> "$HOME/.config/fish/config.fish"
 		fi
 	fi
 
-	echo "     qt5ct + qt6ct configured (Fusion + gruvbox palette, Terminus font)"
+	echo "     qt5ct + qt6ct installed (qt5ct active: Fusion + gruvbox, Terminus font)"
 fi
 
 # ── mpd setup ────────────────────────────────────────────
@@ -151,7 +151,7 @@ echo ""
 echo "============================================"
 echo "  Apps setup complete!"
 echo ""
-[ "$qt" = "y" ] || [ "$qt" = "Y" ] && echo "  qt5ct+qt6ct    Fusion style + gruvbox palette (Font: Terminus 9pt)"
+[ "$qt" = "y" ] || [ "$qt" = "Y" ] && echo "  qt5ct+qt6ct    Fusion + gruvbox (qt5ct active; switch to qt6ct later if needed)"
 [ "$mp" = "y" ] || [ "$mp" = "Y" ] && echo "  mpv            media player"
 [ "$mc" = "y" ] || [ "$mc" = "Y" ] && echo "  ncmpcpp + mpd  music player (ncurses)"
 [ "$ff" = "y" ] || [ "$ff" = "Y" ] && echo "  firefox        web browser"
