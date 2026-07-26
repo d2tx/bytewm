@@ -1,0 +1,128 @@
+#!/bin/sh
+set -e
+
+# ensure curl is available for bootstrap
+if ! command -v curl >/dev/null 2>&1; then
+  if command -v pacman >/dev/null 2>&1; then
+    sudo pacman -S --noconfirm curl
+  fi
+fi
+
+# if being piped via curl (not inside a repo checkout), fetch source first
+if [ ! -f "$(dirname "$0")/bytewm.c" ]; then
+  echo "==> Downloading bytewm..."
+  curl -fsSL https://github.com/d2tx/bytewm/archive/master.tar.gz | tar xz
+  cd bytewm-master && sh setup-arch.sh && exit
+fi
+
+echo "==> bytewm setup for Arch Linux"
+echo "==> Installing packages..."
+sudo pacman -S --needed --noconfirm \
+  base-devel libx11 libxft fontconfig freetype2 xorg-server xorg-xinit alsa-utils \
+  feh xorg-xrdb xorg-fonts-misc pam git ttf-dejavu terminus-font \
+  smartmontools bat fish neovim ranger
+
+echo "==> Installing oh-my-fish..."
+if ! fish -c 'omf version' 2>/dev/null; then
+  git clone --depth 1 https://github.com/oh-my-fish/oh-my-fish "$HOME/.local/share/omf" 2>/dev/null
+fi
+fish -c 'source "$HOME/.local/share/omf/init.fish"; omf install bobthefish' 2>/dev/null || true
+
+echo "==> Setting fish as default shell..."
+sudo chsh -s /usr/bin/fish "$USER" 2>/dev/null || true
+
+echo "==> Generating ranger config..."
+ranger --copy-config=all 2>/dev/null || true
+
+echo "==> Restoring dotfiles..."
+cp -a dotfiles/.bashrc dotfiles/.bash_profile dotfiles/.bash_logout "$HOME/" 2>/dev/null || true
+cp -a dotfiles/.xinitrc dotfiles/.fehbg "$HOME/" 2>/dev/null || true
+cp -a dotfiles/.config/fish "$HOME/.config/" 2>/dev/null || true
+cp -a dotfiles/.config/ranger "$HOME/.config/" 2>/dev/null || true
+cp -a dotfiles/.config/opencode "$HOME/.config/" 2>/dev/null || true
+cp -a dotfiles/.config/gtk-3.0 "$HOME/.config/" 2>/dev/null || true
+cp -a dotfiles/.config/qutebrowser "$HOME/.config/" 2>/dev/null || true
+cp -a dotfiles/.config/nvim "$HOME/.config/" 2>/dev/null || true
+cp -a dotfiles/.config/bytewm "$HOME/.config/" 2>/dev/null || true
+echo "     done"
+
+echo "==> Installing GTK theme..."
+mkdir -p "$HOME/.themes"
+cp -r themes/bytewm-gruvbox "$HOME/.themes/" 2>/dev/null || true
+echo "     done"
+
+echo "==> Installing icon theme..."
+mkdir -p "$HOME/.icons"
+if [ ! -d "$HOME/.icons/Gruvbox-Plus-Dark" ]; then
+  git clone --depth 1 https://github.com/SylEleuth/gruvbox-plus-icon-pack /tmp/gruvbox-icons
+  cp -r /tmp/gruvbox-icons/Gruvbox-Plus-Dark "$HOME/.icons/"
+  rm -rf /tmp/gruvbox-icons
+fi
+echo "     done"
+
+echo "==> Generating st Xresources (terminal theme)..."
+if [ ! -f "$HOME/.Xresources" ]; then
+  cat > "$HOME/.Xresources" << 'XEOF'
+st.foreground: #ebdbb2
+st.background: #282828
+st.cursor:     #689d6a
+st.color0:   #1d2021
+st.color1:   #cc241d
+st.color2:   #98971a
+st.color3:   #d79921
+st.color4:   #458588
+st.color5:   #b16286
+st.color6:   #689d6a
+st.color7:   #a89984
+st.color8:   #928374
+st.color9:   #fb4934
+st.color10:  #b8bb26
+st.color11:  #fabd2f
+st.color12:  #83a598
+st.color13:  #d3869b
+st.color14:  #8ec07c
+st.color15:  #ebdbb2
+XEOF
+fi
+xrdb -merge "$HOME/.Xresources" 2>/dev/null || true
+
+echo "==> Building bytewm, apps and bytewdm..."
+make clean 2>/dev/null || true
+make
+
+echo "==> Installing..."
+sudo make install
+echo "==> Enabling bytewdm..."
+sudo systemctl enable bytewdm 2>/dev/null || true
+
+echo "==> Building st terminal..."
+if ! command -v st >/dev/null 2>&1; then
+  sudo pacman -S --needed --noconfirm libxft fontconfig
+  [ -d ~/st ] || git clone https://github.com/d2tx/st ~/st
+  (cd ~/st && make && sudo make install)
+else
+  echo "     st already installed"
+fi
+
+echo ""
+echo "  bytewm installed!"
+echo ""
+echo "  To start:"
+echo "    TTY:  startx"
+echo "    DM:   sudo /usr/local/bin/bytewdm"
+echo ""
+  echo "  Keybindings:"
+  echo "    Super+Shift+Return  terminal"
+  echo "    Super+Return        scratchpad"
+  echo "    Super+p              launcher"
+  echo "    Super+Shift+m        favorites (bytemenu)"
+  echo "    Super+Shift+r        reload config"
+  echo "    Super+Shift+q        quit"
+  echo "    Super+w              kill window"
+  echo "    Super+j/k            focus stack"
+  echo "    Super+1-5            tags"
+  echo "    Super+b/m/t          layouts (bsp/monocle/tile)"
+  echo "    Super+F10/F11/F12    volume"
+  echo "    Super+Ctrl+L         lock (bytelock)"
+echo ""
+echo "============================================"

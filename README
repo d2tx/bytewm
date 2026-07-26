@@ -1,0 +1,81 @@
+bytewm - minimal gruvbox tiling window manager
+
+  ██████╗ ██╗   ██╗████████╗███████╗██╗    ██╗███╗   ███╗
+  ██╔══██╗╚██╗ ██╔╝╚══██╔══╝██╔════╝██║    ██║████╗ ████║
+  ██████╔╝ ╚████╔╝    ██║   █████╗  ██║ █╗ ██║██╔████╔██║
+  ██╔══██╗  ╚██╔╝     ██║   ██╔══╝  ██║███╗██║██║╚██╔╝██║
+  ██████╔╝   ██║      ██║   ███████╗╚███╔███╔╝██║ ╚═╝ ██║
+  ╚═════╝    ╚═╝      ╚═╝   ╚══════╝ ╚══╝╚══╝ ╚═╝     ╚═╝
+
+forked from dwm (suckless.org).
+
+
+INSTALL
+
+  curl -fsSL https://raw.githubusercontent.com/d2tx/bytewm/master/setup-arch.sh | sh
+
+
+KEYBINDINGS
+
+  Super+Return          Toggle scratchpad (dropdown terminal)
+  Super+Shift+Return    Open terminal (st)
+  Super+p               App launcher (bytelaunch)
+  Super+Shift+m         Favorites menu (bytemenu)
+  Super+s               Screenshot (bytesnap)
+  Super+c               Color picker (bytepick)
+  Super+w               Kill window
+  Super+Ctrl+l          Lock screen (bytelock)
+  Super+F10/F11/F12     Volume down / up / mute
+
+  Super+j/k             Focus next/prev
+  Super+Shift+j/k       Swap windows
+  Super+h/l             Shrink/grow master (tile)
+  Super+Ctrl+h/g         Shrink/grow client (BSP)
+  Super+z               Zoom (swap master)
+  Super+Tab             Previous workspace
+  Alt+Tab               Window switcher (all workspaces)
+  Super+Shift+Space     Toggle floating
+  Super+f               Toggle fullscreen
+
+  Super+1..5            Switch workspace
+  Super+Shift+1..5      Move window to workspace
+  Super+0               Show all workspaces
+
+  Super+t               Tile layout
+  Super+b               BSP layout
+  Super+m               Monocle layout
+  Super+Space           Floating layout
+
+  Super+Shift+r         Reload config (restart)
+  Super+Shift+q         Quit menu
+
+MOUSE
+
+  Super+Left click      Move window
+  Super+Right click     Resize window
+  Super+Scroll         Cycle windows
+
+
+CONFIG
+
+  Visual settings via ~/.config/bytewm/config (no recompile):
+    font, color.*, barheight, borderpx, gappx, gappoh, gappoi, showbar, topbar
+
+  Keybindings, commands, and rules via config.h (recompile).
+
+
+APPS
+
+  bytefetch    System info (neofetch-like), pure asm
+  bytelaunch   dmenu-style app launcher
+  bytemenu     Favorite apps quick-launcher
+  byteswitch   Window switcher (Alt+Tab)
+  bytesnap     Screenshot utility
+  bytepick     Color picker (click screen for hex)
+  bytelock     Screen locker (PAM, x86_64 asm)
+  bytewm-exit  Logout / restart / shutdown dialog
+  bytify       Notification daemon
+  bytevol      Volume OSD
+  bytepass     Password generator (x86_64 asm)
+  bytekill     Process killer (x86_64 asm)
+  bytewdm      Display manager (login greeter)

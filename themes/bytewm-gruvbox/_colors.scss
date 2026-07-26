@@ -1,0 +1,81 @@
+// Gruvbox dark palette
+
+$base_color: #282828;
+$text_color: #ebdbb2;
+$bg_color: #282828;
+$fg_color: #ebdbb2;
+
+$selected_fg_color: #282828;
+$selected_bg_color: #689d6a;
+$selected_borders_color: darken($selected_bg_color, 10%);
+$borders_color: #3c3836;
+
+$link_color: #458588;
+$link_visited_color: #b16286;
+
+$selection_mode_bg: $selected_bg_color;
+$selection_mode_fg: $selected_fg_color;
+$warning_color: #d79921;
+$error_color: #cc241d;
+$warning_fg_color: #282828;
+$error_fg_color: #ebdbb2;
+$success_color: #98971a;
+$destructive_color: #cc241d;
+$suggested_color: #458588;
+$destructive_fg_color: #ebdbb2;
+$suggested_fg_color: #282828;
+
+$drop_target_color: #d65d0e;
+
+$insensitive_fg_color: transparentize($fg_color, 0.55);
+$insensitive_bg_color: #3c3836;
+
+$header_bg: #1d2021;
+$header_bg_backdrop: #282828;
+$header_border: #3c3836;
+$header_fg: #ebdbb2;
+
+$dark_sidebar_bg: #1d2021;
+$dark_sidebar_fg: #ebdbb2;
+$dark_sidebar_border: #1d2021;
+
+$panel_bg: #1d2021;
+$panel_fg: #ebdbb2;
+
+$entry_bg: #3c3836;
+$entry_border: #504945;
+
+$header_entry_bg: #3c3836;
+$header_entry_border: #504945;
+
+$button_bg: #3c3836;
+$button_border: #504945;
+
+$header_button_bg: #3c3836;
+$header_button_border: #504945;
+
+$osd_fg_color: #ebdbb2;
+$osd_bg_color: #282828;
+
+$osd_button_bg: #3c3836;
+$osd_button_border: #504945;
+
+$osd_entry_bg: #3c3836;
+$osd_entry_border: #504945;
+
+$osd_insensitive_bg_color: #282828;
+$osd_insensitive_fg_color: #a89984;
+$osd_borders_color: transparentize(black, 0.3);
+
+$wm_button_close_bg: #cc241d;
+$wm_button_close_hover_bg: lighten(#cc241d, 5%);
+$wm_button_close_active_bg: darken(#cc241d, 5%);
+$wm_icon_close_bg: #ebdbb2;
+
+$wm_button_hover_bg: #3c3836;
+$wm_button_active_bg: #689d6a;
+$wm_button_hover_border: #504945;
+$wm_icon_bg: #a89984;
+$wm_icon_unfocused_bg: #665c54;
+$wm_icon_hover_bg: #ebdbb2;
+$wm_icon_active_bg: #282828;
