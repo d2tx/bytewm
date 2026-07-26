@@ -4,7 +4,7 @@ echo ""
 
 install() { sudo pacman -S --needed --noconfirm "$@" || true; }
 
-read -p "Install Qt5 theming (qt5ct + gruvbox palette)?  [y/N] " qt
+read -p "Install Qt5/6 theming (qt5ct + qt6ct + gruvbox)? [y/N] " qt
 read -p "Install media player (mpv)?              [y/N] " mp
 read -p "Install music player (ncmpcpp + mpd)?     [y/N] " mc
 read -p "Install Firefox?                          [y/N] " ff
@@ -17,7 +17,7 @@ read -p "Install torrent client (rtorrent)?         [y/N] " rt
 echo ""
 
 # ── Install selected ────────────────────────────────────
-[ "$qt" = "y" ] || [ "$qt" = "Y" ] && install qt5ct
+[ "$qt" = "y" ] || [ "$qt" = "Y" ] && install qt5ct qt6ct
 [ "$mp" = "y" ] || [ "$mp" = "Y" ] && install mpv
 [ "$mc" = "y" ] || [ "$mc" = "Y" ] && install ncmpcpp mpd
 [ "$ff" = "y" ] || [ "$ff" = "Y" ] && install firefox
@@ -30,9 +30,9 @@ echo ""
 
 # ── qt5ct setup ──────────────────────────────────────────
 if [ "$qt" = "y" ] || [ "$qt" = "Y" ]; then
-	mkdir -p "$HOME/.config/qt5ct/colors"
+	mkdir -p "$HOME/.config/qt5ct/colors" "$HOME/.config/qt6ct/colors"
 
-	# gruvbox color scheme (fusion style palette)
+	# gruvbox color scheme (fusion style palette) — shared by qt5ct and qt6ct
 	if [ ! -f "$HOME/.config/qt5ct/colors/gruvbox.conf" ]; then
 		cat > "$HOME/.config/qt5ct/colors/gruvbox.conf" << 'QEOF'
 [ColorScheme]
@@ -41,6 +41,7 @@ inactive_colors=#a89984, #3c3836, #504945, #3c3836, #282828, #504945, #a89984, #
 disabled_colors=#928374, #3c3836, #504945, #3c3836, #282828, #504945, #928374, #928374, #928374, #282828, #282828, #282828, #3c3836, #928374, #458588, #b16286, #3c3836, #000000, #3c3836, #928374
 QEOF
 	fi
+	cp "$HOME/.config/qt5ct/colors/gruvbox.conf" "$HOME/.config/qt6ct/colors/gruvbox.conf" 2>/dev/null || true
 
 	# qt5ct.conf
 	cat > "$HOME/.config/qt5ct/qt5ct.conf" << 'QEOF'
@@ -75,19 +76,52 @@ ignored_applications=@Invalid()
 QEOF
 	sed -i "s|%HOME|$HOME|" "$HOME/.config/qt5ct/qt5ct.conf"
 
+	# qt6ct.conf
+	cat > "$HOME/.config/qt6ct/qt6ct.conf" << 'QEOF'
+[Appearance]
+custom_palette=true
+standard_dialogs=default
+style=Fusion
+color_scheme_path=%HOME/.config/qt6ct/colors/gruvbox.conf
+
+[Fonts]
+fixed="xos4 Terminus,9,-1,5,50,0,0,0,0,0,Regular"
+general="xos4 Terminus,9,-1,5,50,0,0,0,0,0,Regular"
+
+[Interface]
+activate_item_on_single_click=1
+buttonbox_layout=0
+cursor_flash_time=1000
+dialog_buttons_have_icons=1
+double_click_interval=400
+gui_effects=@Invalid()
+keyboard_scheme=2
+menus_have_icons=true
+show_shortcuts_in_context_menus=true
+stylesheets=@Invalid()
+toolbutton_style=4
+underline_shortcut=1
+wheel_scroll_lines=3
+
+[Troubleshooting]
+force_raster_widgets=1
+ignored_applications=@Invalid()
+QEOF
+	sed -i "s|%HOME|$HOME|" "$HOME/.config/qt6ct/qt6ct.conf"
+
 	# env var: bash
 	if ! grep -q 'QT_QPA_PLATFORMTHEME' "$HOME/.bash_profile" 2>/dev/null; then
-		echo 'export QT_QPA_PLATFORMTHEME=qt5ct' >> "$HOME/.bash_profile"
+		echo 'export QT_QPA_PLATFORMTHEME=qt5ct:qt6ct' >> "$HOME/.bash_profile"
 	fi
 
 	# env var: fish
 	if [ -f "$HOME/.config/fish/config.fish" ]; then
 		if ! grep -q 'QT_QPA_PLATFORMTHEME' "$HOME/.config/fish/config.fish" 2>/dev/null; then
-			echo 'set -gx QT_QPA_PLATFORMTHEME qt5ct' >> "$HOME/.config/fish/config.fish"
+			echo 'set -gx QT_QPA_PLATFORMTHEME qt5ct:qt6ct' >> "$HOME/.config/fish/config.fish"
 		fi
 	fi
 
-	echo "     qt5ct configured (Fusion + gruvbox palette, Terminus font)"
+	echo "     qt5ct + qt6ct configured (Fusion + gruvbox palette, Terminus font)"
 fi
 
 # ── mpd setup ────────────────────────────────────────────
@@ -117,7 +151,7 @@ echo ""
 echo "============================================"
 echo "  Apps setup complete!"
 echo ""
-[ "$qt" = "y" ] || [ "$qt" = "Y" ] && echo "  qt5ct          Fusion style + gruvbox palette (Font: Terminus 9pt)"
+[ "$qt" = "y" ] || [ "$qt" = "Y" ] && echo "  qt5ct+qt6ct    Fusion style + gruvbox palette (Font: Terminus 9pt)"
 [ "$mp" = "y" ] || [ "$mp" = "Y" ] && echo "  mpv            media player"
 [ "$mc" = "y" ] || [ "$mc" = "Y" ] && echo "  ncmpcpp + mpd  music player (ncurses)"
 [ "$ff" = "y" ] || [ "$ff" = "Y" ] && echo "  firefox        web browser"
