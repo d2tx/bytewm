@@ -41,7 +41,13 @@ inactive_colors=#a89984, #3c3836, #504945, #3c3836, #282828, #504945, #a89984, #
 disabled_colors=#928374, #3c3836, #504945, #3c3836, #282828, #504945, #928374, #928374, #928374, #282828, #282828, #282828, #3c3836, #928374, #458588, #b16286, #3c3836, #000000, #3c3836, #928374
 QEOF
 	fi
-	cp "$HOME/.config/qt5ct/colors/gruvbox.conf" "$HOME/.config/qt6ct/colors/gruvbox.conf" 2>/dev/null || true
+	# qt6ct color scheme (21 colors — Qt6 adds PlaceholderText role)
+	cat > "$HOME/.config/qt6ct/colors/gruvbox.conf" << 'QEOF6'
+[ColorScheme]
+active_colors=#ebdbb2, #3c3836, #504945, #3c3836, #1d2021, #504945, #ebdbb2, #ebdbb2, #ebdbb2, #282828, #282828, #1d2021, #689d6a, #282828, #458588, #b16286, #3c3836, #000000, #3c3836, #ebdbb2, #928374
+inactive_colors=#a89984, #3c3836, #504945, #3c3836, #282828, #504945, #a89984, #a89984, #a89984, #282828, #282828, #282828, #504945, #a89984, #458588, #b16286, #3c3836, #000000, #3c3836, #a89984, #928374
+disabled_colors=#928374, #3c3836, #504945, #3c3836, #282828, #504945, #928374, #928374, #928374, #282828, #282828, #282828, #3c3836, #928374, #458588, #b16286, #3c3836, #000000, #3c3836, #928374, #928374
+QEOF6
 
 	# qt5ct.conf
 	cat > "$HOME/.config/qt5ct/qt5ct.conf" << 'QEOF'
