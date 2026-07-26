@@ -2,6 +2,7 @@
 echo "==> bytewm apps setup for Arch Linux"
 echo ""
 
+BASE="https://raw.githubusercontent.com/d2tx/bytewm/master/examples"
 install() { sudo pacman -S --needed --noconfirm "$@" || true; }
 
 read -p "Install Qt5/6 theming (qt5ct + qt6ct + gruvbox)? [y/N] " qt
@@ -28,126 +29,35 @@ echo ""
 [ "$ar" = "y" ] || [ "$ar" = "Y" ] && install unzip unrar p7zip
 [ "$rt" = "y" ] || [ "$rt" = "Y" ] && install rtorrent
 
-# ── qt5ct setup ──────────────────────────────────────────
+# ── qt5ct / qt6ct ────────────────────────────────────────
 if [ "$qt" = "y" ] || [ "$qt" = "Y" ]; then
+	echo "==> Setting up Qt theming..."
 	mkdir -p "$HOME/.config/qt5ct/colors" "$HOME/.config/qt6ct/colors"
 
-	# gruvbox color scheme (fusion style palette) — shared by qt5ct and qt6ct
-	if [ ! -f "$HOME/.config/qt5ct/colors/gruvbox.conf" ]; then
-		cat > "$HOME/.config/qt5ct/colors/gruvbox.conf" << 'QEOF'
-[ColorScheme]
-active_colors=#ebdbb2, #3c3836, #504945, #3c3836, #1d2021, #504945, #ebdbb2, #ebdbb2, #ebdbb2, #282828, #282828, #1d2021, #689d6a, #282828, #458588, #b16286, #3c3836, #000000, #3c3836, #ebdbb2
-inactive_colors=#a89984, #3c3836, #504945, #3c3836, #282828, #504945, #a89984, #a89984, #a89984, #282828, #282828, #282828, #504945, #a89984, #458588, #b16286, #3c3836, #000000, #3c3836, #a89984
-disabled_colors=#928374, #3c3836, #504945, #3c3836, #282828, #504945, #928374, #928374, #928374, #282828, #282828, #282828, #3c3836, #928374, #458588, #b16286, #3c3836, #000000, #3c3836, #928374
-QEOF
-	fi
-	# qt6ct color scheme (21 colors — Qt6 adds PlaceholderText role)
-	cat > "$HOME/.config/qt6ct/colors/gruvbox.conf" << 'QEOF6'
-[ColorScheme]
-active_colors=#ebdbb2, #3c3836, #504945, #3c3836, #1d2021, #504945, #ebdbb2, #ebdbb2, #ebdbb2, #282828, #282828, #1d2021, #689d6a, #282828, #458588, #b16286, #3c3836, #000000, #3c3836, #ebdbb2, #928374
-inactive_colors=#a89984, #3c3836, #504945, #3c3836, #282828, #504945, #a89984, #a89984, #a89984, #282828, #282828, #282828, #504945, #a89984, #458588, #b16286, #3c3836, #000000, #3c3836, #a89984, #928374
-disabled_colors=#928374, #3c3836, #504945, #3c3836, #282828, #504945, #928374, #928374, #928374, #282828, #282828, #282828, #3c3836, #928374, #458588, #b16286, #3c3836, #000000, #3c3836, #928374, #928374
-QEOF6
-
-	# qt5ct.conf
-	cat > "$HOME/.config/qt5ct/qt5ct.conf" << 'QEOF'
-[Appearance]
-custom_palette=true
-standard_dialogs=default
-style=Fusion
-color_scheme_path=%HOME/.config/qt5ct/colors/gruvbox.conf
-
-[Fonts]
-fixed="xos4 Terminus,9,-1,5,50,0,0,0,0,0,Regular"
-general="xos4 Terminus,9,-1,5,50,0,0,0,0,0,Regular"
-
-[Interface]
-activate_item_on_single_click=1
-buttonbox_layout=0
-cursor_flash_time=1000
-dialog_buttons_have_icons=1
-double_click_interval=400
-gui_effects=@Invalid()
-keyboard_scheme=2
-menus_have_icons=true
-show_shortcuts_in_context_menus=true
-stylesheets=@Invalid()
-toolbutton_style=4
-underline_shortcut=1
-wheel_scroll_lines=3
-
-[Troubleshooting]
-force_raster_widgets=1
-ignored_applications=@Invalid()
-QEOF
-	sed -i "s|%HOME|$HOME|" "$HOME/.config/qt5ct/qt5ct.conf"
-
-	# qt6ct.conf
-	cat > "$HOME/.config/qt6ct/qt6ct.conf" << 'QEOF'
-[Appearance]
-custom_palette=true
-standard_dialogs=default
-style=Fusion
-color_scheme_path=%HOME/.config/qt6ct/colors/gruvbox.conf
-
-[Fonts]
-fixed="xos4 Terminus,9,-1,5,50,0,0,0,0,0,Regular"
-general="xos4 Terminus,9,-1,5,50,0,0,0,0,0,Regular"
-
-[Interface]
-activate_item_on_single_click=1
-buttonbox_layout=0
-cursor_flash_time=1000
-dialog_buttons_have_icons=1
-double_click_interval=400
-gui_effects=@Invalid()
-keyboard_scheme=2
-menus_have_icons=true
-show_shortcuts_in_context_menus=true
-stylesheets=@Invalid()
-toolbutton_style=4
-underline_shortcut=1
-wheel_scroll_lines=3
-
-[Troubleshooting]
-force_raster_widgets=1
-ignored_applications=@Invalid()
-QEOF
-	sed -i "s|%HOME|$HOME|" "$HOME/.config/qt6ct/qt6ct.conf"
+	curl -fsSL "$BASE/qt5ct-gruvbox.conf" -o "$HOME/.config/qt5ct/colors/gruvbox.conf"
+	curl -fsSL "$BASE/qt6ct-gruvbox.conf" -o "$HOME/.config/qt6ct/colors/gruvbox.conf"
+	curl -fsSL "$BASE/qt5ct.conf" | sed "s|%HOME|$HOME|" > "$HOME/.config/qt5ct/qt5ct.conf"
+	curl -fsSL "$BASE/qt6ct.conf" | sed "s|%HOME|$HOME|" > "$HOME/.config/qt6ct/qt6ct.conf"
 
 	# env var: bash
 	if ! grep -q 'QT_QPA_PLATFORMTHEME' "$HOME/.bash_profile" 2>/dev/null; then
 		echo 'export QT_QPA_PLATFORMTHEME=qt5ct' >> "$HOME/.bash_profile"
 	fi
-
 	# env var: fish
 	if [ -f "$HOME/.config/fish/config.fish" ]; then
 		if ! grep -q 'QT_QPA_PLATFORMTHEME' "$HOME/.config/fish/config.fish" 2>/dev/null; then
 			echo 'set -gx QT_QPA_PLATFORMTHEME qt5ct' >> "$HOME/.config/fish/config.fish"
 		fi
 	fi
-
-	echo "     qt5ct + qt6ct installed (qt5ct active: Fusion + gruvbox, Terminus font)"
+	echo "     qt5ct + qt6ct configured (Fusion + gruvbox, Terminus font)"
 fi
 
-# ── mpd setup ────────────────────────────────────────────
+# ── mpd ──────────────────────────────────────────────────
 if [ "$mc" = "y" ] || [ "$mc" = "Y" ]; then
 	if ! systemctl --user is-enabled mpd 2>/dev/null | grep -q enabled; then
+		echo "==> Configuring mpd..."
 		mkdir -p "$HOME/.config/mpd/playlists" "$HOME/music"
-		if [ ! -f "$HOME/.config/mpd/mpd.conf" ]; then
-			cat > "$HOME/.config/mpd/mpd.conf" << 'EOF'
-music_directory    "~/music"
-playlist_directory "~/.config/mpd/playlists"
-db_file            "~/.config/mpd/database"
-log_file           "~/.config/mpd/log"
-pid_file           "~/.config/mpd/pid"
-state_file         "~/.config/mpd/state"
-audio_output {
-	type  "pulse"
-	name  "PulseAudio"
-}
-EOF
-		fi
+		curl -fsSL "$BASE/mpd.conf" -o "$HOME/.config/mpd/mpd.conf"
 		systemctl --user enable --now mpd 2>/dev/null || true
 		echo "     mpd configured and enabled"
 	fi
