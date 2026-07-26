@@ -473,8 +473,18 @@ void
 setfocus(Client *c)
 {
 	if (!c) return;
-	if (c->isfullscreen)
-		resizeclient(c, c->mon->mx, c->mon->my, c->mon->mw, c->mon->mh);
+	if (c->isfullscreen) {
+		XWindowChanges wc = {
+			.x = c->mon->mx, .y = c->mon->my,
+			.width = c->mon->mw, .height = c->mon->mh,
+			.border_width = c->bw
+		};
+		c->x = wc.x; c->y = wc.y;
+		c->w = wc.width; c->h = wc.height;
+		XConfigureWindow(dpy, c->win,
+			CWX|CWY|CWWidth|CWHeight|CWBorderWidth, &wc);
+		XSync(dpy, False);
+	}
 	XSetInputFocus(dpy, c->win, RevertToPointerRoot, CurrentTime);
 	XChangeProperty(dpy, root, netatom[NetActiveWindow], XA_WINDOW, 32,
 		PropModeReplace, (unsigned char *)&c->win, 1);
@@ -2140,10 +2150,13 @@ setfullscreen(Client *c, int fs)
 		c->isfullscreen = 1;
 		c->oldx = c->x; c->oldy = c->y;
 		c->oldw = c->w; c->oldh = c->h;
+		c->oldstate = c->bw;
+		c->bw = 0;
 		resizeclient(c, c->mon->mx, c->mon->my, c->mon->mw, c->mon->mh);
 		XRaiseWindow(dpy, c->win);
 	} else if (!fs && c->isfullscreen) {
 		c->isfullscreen = 0;
+		c->bw = c->oldstate;
 		resizeclient(c, c->oldx, c->oldy, c->oldw, c->oldh);
 		arrange(c->mon);
 	}
