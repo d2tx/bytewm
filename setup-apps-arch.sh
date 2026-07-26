@@ -6,6 +6,7 @@ BASE="https://raw.githubusercontent.com/d2tx/bytewm/master/examples"
 install() { sudo pacman -S --needed --noconfirm "$@" || true; }
 
 read -p "Install Qt5/6 theming (qt5ct + qt6ct + gruvbox)? [y/N] " qt
+read -p "Install OpenCode (coding AI agent)?        [y/N] " oc
 read -p "Install media player (mpv)?              [y/N] " mp
 read -p "Install music player (ncmpcpp + mpd)?     [y/N] " mc
 read -p "Install Firefox?                          [y/N] " ff
@@ -19,6 +20,7 @@ echo ""
 
 # ── Install selected ────────────────────────────────────
 [ "$qt" = "y" ] || [ "$qt" = "Y" ] && install qt5ct qt6ct
+[ "$oc" = "y" ] || [ "$oc" = "Y" ] && install opencode
 [ "$mp" = "y" ] || [ "$mp" = "Y" ] && install mpv
 [ "$mc" = "y" ] || [ "$mc" = "Y" ] && install ncmpcpp mpd
 [ "$ff" = "y" ] || [ "$ff" = "Y" ] && install firefox
@@ -68,6 +70,7 @@ echo "============================================"
 echo "  Apps setup complete!"
 echo ""
 [ "$qt" = "y" ] || [ "$qt" = "Y" ] && echo "  qt5ct+qt6ct    Fusion + gruvbox (qt5ct active; switch to qt6ct later if needed)"
+[ "$oc" = "y" ] || [ "$oc" = "Y" ] && echo "  opencode       coding AI agent"
 [ "$mp" = "y" ] || [ "$mp" = "Y" ] && echo "  mpv            media player"
 [ "$mc" = "y" ] || [ "$mc" = "Y" ] && echo "  ncmpcpp + mpd  music player (ncurses)"
 [ "$ff" = "y" ] || [ "$ff" = "Y" ] && echo "  firefox        web browser"
