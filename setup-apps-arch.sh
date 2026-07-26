@@ -10,6 +10,7 @@ read -p "Install OpenCode (coding AI agent)?        [y/N] " oc
 read -p "Install media player (mpv)?              [y/N] " mp
 read -p "Install music player (ncmpcpp + mpd)?     [y/N] " mc
 read -p "Install Firefox?                          [y/N] " ff
+read -p "Install qutebrowser (vim-like browser)?    [y/N] " qb
 read -p "Install file manager (thunar)?            [y/N] " th
 read -p "Install compositor (picom)?               [y/N] " pc
 read -p "Install PDF viewer (zathura)?             [y/N] " za
@@ -24,6 +25,7 @@ echo ""
 [ "$mp" = "y" ] || [ "$mp" = "Y" ] && install mpv
 [ "$mc" = "y" ] || [ "$mc" = "Y" ] && install ncmpcpp mpd
 [ "$ff" = "y" ] || [ "$ff" = "Y" ] && install firefox
+[ "$qb" = "y" ] || [ "$qb" = "Y" ] && install qutebrowser
 [ "$th" = "y" ] || [ "$th" = "Y" ] && install thunar
 [ "$pc" = "y" ] || [ "$pc" = "Y" ] && install picom
 [ "$za" = "y" ] || [ "$za" = "Y" ] && install zathura zathura-pdf-mupdf
@@ -74,6 +76,7 @@ echo ""
 [ "$mp" = "y" ] || [ "$mp" = "Y" ] && echo "  mpv            media player"
 [ "$mc" = "y" ] || [ "$mc" = "Y" ] && echo "  ncmpcpp + mpd  music player (ncurses)"
 [ "$ff" = "y" ] || [ "$ff" = "Y" ] && echo "  firefox        web browser"
+[ "$qb" = "y" ] || [ "$qb" = "Y" ] && echo "  qutebrowser    vim-like web browser"
 [ "$th" = "y" ] || [ "$th" = "Y" ] && echo "  thunar         file manager"
 [ "$pc" = "y" ] || [ "$pc" = "Y" ] && echo "  picom          compositor (transparency / shadows)"
 [ "$za" = "y" ] || [ "$za" = "Y" ] && echo "  zathura        PDF viewer (vim keys)"
