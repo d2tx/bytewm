@@ -1548,7 +1548,12 @@ manage(Window w, XWindowAttributes *wa)
 	if (XGetClassHint(dpy, w, &ch)) {
 		if ((ch.res_class && strcmp(ch.res_class, "scratchpad") == 0)
 		    || (ch.res_name && strcmp(ch.res_name, "scratchpad") == 0)) {
-			if (scratchpad) XUnmapWindow(dpy, scratchpad->win);
+			if (scratchpad && scratchpad != c) {
+				XUnmapWindow(dpy, scratchpad->win);
+				detach(scratchpad);
+				detachstack(scratchpad);
+				free(scratchpad);
+			}
 			scratchpad = c;
 			scratchpad->tags = 0;
 			scratchpad->isfloating = 1;
@@ -1566,9 +1571,11 @@ manage(Window w, XWindowAttributes *wa)
 
 	/* set border and map before arranging so XRaiseWindow works */
 	setborder(c, c->mon == selmon && ISVISIBLE(c, selmon->tags));
-	XMapWindow(dpy, w);
-	XSync(dpy, False);
-	if (c->mon == selmon && ISVISIBLE(c, selmon->tags)) {
+	if (wa->map_state == IsViewable) {
+		XMapWindow(dpy, w);
+		XSync(dpy, False);
+	}
+	if (c->mon == selmon && ISVISIBLE(c, selmon->tags) && wa->map_state == IsViewable) {
 		focus(c, 1);
 	}
 	arrange(c->mon);
@@ -1910,11 +1917,17 @@ movemouse(const Arg *arg)
 
 	XQueryPointer(dpy, root, &dummy, &dummy, &nx, &ny, &di, &di, &dui);
 	ox = c->x - nx; oy = c->y - ny;
-		while (!XCheckMaskEvent(dpy, ButtonReleaseMask, &ev)) {
-		XQueryPointer(dpy, root, &dummy, &dummy, &nx, &ny, &di, &di, &dui);
-		resize(c, nx + ox, ny + oy, c->w, c->h, 1);
-		while (XCheckMaskEvent(dpy, PointerMotionMask, &ev));
-	}
+	do {
+		XMaskEvent(dpy, MOUSEMASK|ExposureMask|KeyPressMask, &ev);
+		switch (ev.type) {
+		case MotionNotify:
+			XQueryPointer(dpy, root, &dummy, &dummy, &nx, &ny, &di, &di, &dui);
+			resize(c, nx + ox, ny + oy, c->w, c->h, 1);
+			break;
+		}
+	} while (ev.type != ButtonRelease &&
+	         !(ev.type == KeyPress &&
+	           XkbKeycodeToKeysym(dpy, ev.xkey.keycode, 0, 0) == XK_Escape));
 	XUngrabPointer(dpy, CurrentTime);
 }
 
@@ -1951,12 +1964,18 @@ resizemouse(const Arg *arg)
 	XQueryPointer(dpy, root, &dummy, &dummy, &nx, &ny, &di, &di, &dui);
 	ox = c->w - nx;
 	oy = c->h - ny;
-	while (!XCheckMaskEvent(dpy, ButtonReleaseMask, &ev)) {
-		XQueryPointer(dpy, root, &dummy, &dummy, &nx, &ny, &di, &di, &dui);
-		resize(c, c->x, c->y, MAX(ox + nx, MAX(50, c->minw)),
-			MAX(oy + ny, MAX(50, c->minh)), 1);
-		while (XCheckMaskEvent(dpy, PointerMotionMask, &ev));
-	}
+	do {
+		XMaskEvent(dpy, MOUSEMASK|ExposureMask|KeyPressMask, &ev);
+		switch (ev.type) {
+		case MotionNotify:
+			XQueryPointer(dpy, root, &dummy, &dummy, &nx, &ny, &di, &di, &dui);
+			resize(c, c->x, c->y, MAX(ox + nx, MAX(50, c->minw)),
+				MAX(oy + ny, MAX(50, c->minh)), 1);
+			break;
+		}
+	} while (ev.type != ButtonRelease &&
+	         !(ev.type == KeyPress &&
+	           XkbKeycodeToKeysym(dpy, ev.xkey.keycode, 0, 0) == XK_Escape));
 	XUngrabPointer(dpy, CurrentTime);
 }
 
@@ -2055,6 +2074,12 @@ updategeom(void)
 		c = next;
 	}
 
+	for (Client *t = selmon->stack; t; t = t->snext)
+		if (ISVISIBLE(t, selmon->tags)) {
+			selmon->sel = t;
+			break;
+		}
+
 	updatebars();
 	for (Monitor *m = mons; m; m = m->next)
 		arrange(m);
@@ -2073,8 +2098,7 @@ scan(void)
 		for (unsigned int i = 0; i < nw; i++) {
 			XWindowAttributes wa;
 			if (!XGetWindowAttributes(dpy, wins[i], &wa)
-			    || wa.override_redirect
-			    || wa.map_state != IsViewable)
+			    || wa.override_redirect)
 				continue;
 			manage(wins[i], &wa);
 		}
@@ -2199,10 +2223,17 @@ sigsegv(int sig)
 	int fd = open("/tmp/bytewm_crash.log",
 	              O_WRONLY | O_CREAT | O_APPEND, 0644);
 	if (fd >= 0) {
-		void *buf[32];
-		int n = backtrace(buf, sizeof(buf)/sizeof(buf[0]));
-		dprintf(fd, "crash signal %d\n", sig);
-		backtrace_symbols_fd(buf, n, fd);
+		char msg[64];
+		char *p = msg;
+		char *end = msg + sizeof(msg) - 1;
+		const char *prefix = "crash signal ";
+		while (*prefix && p < end) *p++ = *prefix++;
+		if (sig < 0 && p < end) { *p++ = '-'; sig = -sig; }
+		if (sig >= 100 && p < end) *p++ = '0' + (sig / 100);
+		if (sig >= 10 && p < end)  *p++ = '0' + ((sig / 10) % 10);
+		if (p < end) *p++ = '0' + (sig % 10);
+		if (p < end) *p++ = '\n';
+		write(fd, msg, (size_t)(p - msg));
 		close(fd);
 	}
 	signal(sig, SIG_DFL);
@@ -2497,7 +2528,6 @@ cleanup(void)
 		while (m->clients) {
 			Client *c = m->clients;
 			m->clients = c->next;
-			XDestroyWindow(dpy, c->win);
 			free(c);
 		}
 		if (m->barwin) XDestroyWindow(dpy, m->barwin);
