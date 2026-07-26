@@ -50,6 +50,7 @@ end
 set -gx EDITOR nvim
 set -gx VISUAL nvim
 set -gx BAT_THEME gruvbox-dark
+set -gx QT_QPA_PLATFORMTHEME qt5ct
 
 set -g fish_key_bindings fish_default_key_bindings
 set -g fish_pager_color_progress brblack
