@@ -689,87 +689,137 @@ sq_term:
     ret
 
 # ═══════════════════════════════════════════════════════
-#  WM DETECTION  (scans /proc for bytewm process)
+#  WM DETECTION  (uses getdents64 on /proc)
 # ═══════════════════════════════════════════════════════
 
 detect_wm:
     pushq   %r12
     pushq   %r13
+    pushq   %r14
     pushq   %rbx
 
-    # PID range: 100 - 65535
-    movq    $100, %rbx
+    # open "/proc"
+    movq    $2, %rax
+    leaq    dw_proc(%rip), %rdi
+    xorq    %rsi, %rsi
+    xorq    %rdx, %rdx
+    syscall
+    cmpq    $0, %rax
+    jl      dw_done
+    movq    %rax, %r12                # r12 = /proc fd
 
-dw_scan:
-    movq    %rbx, %rax
-    # write PID digits to path_comm+6 using itoa
+dw_readdir:
+    # getdents64(fd, buf, 4096)
+    movq    $217, %rax                # SYS_GETDENTS64
+    movq    %r12, %rdi
+    leaq    buf_osrel(%rip), %rsi
+    movq    $4096, %rdx
+    syscall
+    cmpq    $0, %rax
+    jle     dw_closeproc
+
+    movq    %rax, %r13                # r13 = bytes read
+    xorq    %rbx, %rbx                # rbx = offset
+
+dw_entry:
+    cmpq    %r13, %rbx
+    jge     dw_readdir
+
+    leaq    buf_osrel(%rip), %r14
+    addq    %rbx, %r14                # r14 = &buf[offset]
+
+    # d_name is at offset 19, check first char is digit
+    leaq    19(%r14), %rdi
+    cmpb    $'0', (%rdi)
+    jl      dw_next
+    cmpb    $'9', (%rdi)
+    jg      dw_next
+
+    # build /proc/<d_name>/comm path in path_comm
     leaq    path_comm(%rip), %rdi
-    movl    $0x6f72702f, (%rdi)     # "/pro"
-    movw    $0x2f63, 4(%rdi)        # "c/"
-    leaq    6(%rdi), %rsi           # dest for itoa
-    call    itoa
-    leaq    path_comm+6(%rip), %rsi
-    call    _strlen                 # rax = PID string length
-    leaq    path_comm+6(%rip), %rdi
-    addq    %rax, %rdi              # rdi = after PID digits
-    movb    $0x2f, (%rdi)           # "/"
-    movl    $0x6d6d6f63, 1(%rdi)    # "comm"
-    movb    $0, 5(%rdi)
+    movl    $0x6f72702f, (%rdi)       # "/pro"
+    movw    $0x2f63, 4(%rdi)          # "c/"
+    leaq    6(%rdi), %rsi             # dest for name
+    leaq    19(%r14), %rdx            # src = d_name
+dw_copyname:
+    movb    (%rdx), %cl
+    movb    %cl, (%rsi)
+    cmpb    $0, %cl
+    je      dw_namecopied
+    incq    %rsi
+    incq    %rdx
+    jmp     dw_copyname
+dw_namecopied:
+    movb    $0x2f, (%rsi)             # "/"
+    movl    $0x6d6d6f63, 1(%rsi)      # "comm"
+    movb    $0, 5(%rsi)
 
-    # open /proc/PID/comm
+    # open /proc/<name>/comm
     movq    $2, %rax
     leaq    path_comm(%rip), %rdi
     xorq    %rsi, %rsi
     xorq    %rdx, %rdx
     syscall
     cmpq    $0, %rax
-    jl      dw_nextpid
-    movq    %rax, %r12
+    jl      dw_next
+    movq    %rax, %r11
 
     # read comm
     movq    $0, out_tmp(%rip)
     movq    $0, %rax
-    movq    %r12, %rdi
+    movq    %r11, %rdi
     leaq    out_tmp(%rip), %rsi
-    movq    $8, %rdx
+    movq    $7, %rdx
     syscall
 
     pushq   %rax
     movq    $3, %rax
-    movq    %r12, %rdi
+    movq    %r11, %rdi
     syscall
     popq    %rax
 
     # check for "bytewm"
     cmpb    $'b', out_tmp(%rip)
-    jne     dw_nextpid
+    jne     dw_next
     cmpb    $'y', out_tmp+1(%rip)
-    jne     dw_nextpid
+    jne     dw_next
     cmpb    $'t', out_tmp+2(%rip)
-    jne     dw_nextpid
+    jne     dw_next
     cmpb    $'e', out_tmp+3(%rip)
-    jne     dw_nextpid
+    jne     dw_next
     cmpb    $'w', out_tmp+4(%rip)
-    jne     dw_nextpid
+    jne     dw_next
     cmpb    $'m', out_tmp+5(%rip)
-    jne     dw_nextpid
+    jne     dw_next
 
     # found
     movq    out_tmp(%rip), %r8
     movq    %r8, out_wm(%rip)
     movb    $0, out_wm+6(%rip)
-    jmp     dw_done
+    jmp     dw_closeproc
 
-dw_nextpid:
-    incq    %rbx
-    cmpq    $65536, %rbx
-    jl      dw_scan
+dw_next:
+    # advance to next getdents entry
+    movzwq  16(%r14), %rcx           # rcx = d_reclen
+    addq    %rcx, %rbx
+    jmp     dw_entry
+
+dw_closeproc:
+    movq    $3, %rax
+    movq    %r12, %rdi
+    syscall
 
 dw_done:
     popq    %rbx
+    popq    %r14
     popq    %r13
     popq    %r12
     ret
+
+.section .rodata
+dw_proc:    .asciz  "/proc"
+
+.section .text
 
 # ═══════════════════════════════════════════════════════
 #  GATHER SYSTEM INFO
