@@ -319,7 +319,7 @@ xerror(Display *dpy, XErrorEvent *ee)
 	}
 	if (ee->error_code == BadAccess)
 		die("bytewm: another window manager is already running\n");
-	return xerrorxlib(dpy, ee);
+	return 0;
 }
 
 void
@@ -1521,16 +1521,6 @@ manage(Window w, XWindowAttributes *wa)
 	/* in floating layout, auto-float new windows and center them */
 	if (!selmon->lt[selmon->layout]->arrange) {
 		c->isfloating = 1;
-		c->bw = 1;
-		c->x = selmon->wx + (selmon->ww - c->w) / 2;
-		c->y = selmon->wy + (selmon->wh - c->h) / 3;
-		c->x = MAX(selmon->wx, c->x);
-		c->y = MAX(selmon->wy, c->y);
-		resizeclient(c, c->x, c->y, c->w, c->h);
-	}
-
-	/* center rule-matched floating windows in tiling layout */
-	if (c->isfloating && selmon->lt[selmon->layout]->arrange) {
 		c->bw = 1;
 		c->x = selmon->wx + (selmon->ww - c->w) / 2;
 		c->y = selmon->wy + (selmon->wh - c->h) / 3;
