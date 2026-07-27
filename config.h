@@ -42,6 +42,8 @@ static const char *tags[] = { "I", "II", "III", "IV", "V" };
 static const Rule rules[] = {
 	{ "st",          NULL,       NULL,        0,         0 },
 	{ "st-256color", NULL,       NULL,        0,         0 },
+	{ "steamwebhelper", "steam",   NULL,        0,         1 },
+	{ NULL,             "steam",   NULL,        0,         1 },
 };
 
 static const float mfact     = 0.55;

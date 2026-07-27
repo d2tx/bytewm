@@ -519,9 +519,8 @@ focus(Client *c, int raise)
 		drawbars();
 	}
 	setborder(c, 1);
+	grabbuttons(c, 1);
 	if (raise) {
-		grabbuttons(c, 1);
-		XRaiseWindow(dpy, c->win);
 		restack(m);
 	}
 	setfocus(c);
@@ -690,16 +689,13 @@ restack(Monitor *m)
 {
 	if (!m->sel) return;
 
-	XRaiseWindow(dpy, m->sel->win);
 	if (m->lt[m->layout]->arrange) {
 		XWindowChanges wc = { .stack_mode = Below, .sibling = m->barwin };
 		for (Client *c = m->stack; c; c = c->snext)
 			if (ISVISIBLE(c, m->tags) && c != m->sel)
 				XConfigureWindow(dpy, c->win, CWSibling|CWStackMode, &wc);
 	}
-	for (Client *c = m->stack; c; c = c->snext)
-		if (ISVISIBLE(c, m->tags) && c != m->sel && c->isfloating)
-			XRaiseWindow(dpy, c->win);
+	XRaiseWindow(dpy, m->sel->win);
 }
 
 void
@@ -1419,8 +1415,14 @@ setlayout(const Arg *arg)
 	} else {
 		selmon->lt[selmon->layout] = lt;
 	}
-	if (lt->arrange)
+	if (lt->arrange) {
+		for (Client *c = selmon->clients; c; c = c->next) {
+			c->isfloating = 0;
+			c->bw = borderpx;
+			XSetWindowBorderWidth(dpy, c->win, c->bw);
+		}
 		selmon->lt[selmon->layout]->arrange(selmon, countclients(selmon));
+	}
 	drawbars();
 }
 
@@ -1527,6 +1529,16 @@ manage(Window w, XWindowAttributes *wa)
 		resizeclient(c, c->x, c->y, c->w, c->h);
 	}
 
+	/* center rule-matched floating windows in tiling layout */
+	if (c->isfloating && selmon->lt[selmon->layout]->arrange) {
+		c->bw = 1;
+		c->x = selmon->wx + (selmon->ww - c->w) / 2;
+		c->y = selmon->wy + (selmon->wh - c->h) / 3;
+		c->x = MAX(selmon->wx, c->x);
+		c->y = MAX(selmon->wy, c->y);
+		resizeclient(c, c->x, c->y, c->w, c->h);
+	}
+
 	/* get PID */
 	Atom pidatom = XInternAtom(dpy, "_NET_WM_PID", False);
 	if (pidatom != None) {
@@ -1587,6 +1599,7 @@ manage(Window w, XWindowAttributes *wa)
 	}
 	if (c->mon == selmon && ISVISIBLE(c, selmon->tags) && wa->map_state == IsViewable) {
 		focus(c, 1);
+		XSync(dpy, False);
 	}
 	arrange(c->mon);
 	drawbars();
@@ -1811,13 +1824,19 @@ destroynotify(XEvent *e)
 void
 enternotify(XEvent *e)
 {
+	static Time lasttime = 0;
 	XCrossingEvent *ev = &e->xcrossing;
-	if (ev->mode != NotifyNormal || ev->detail == NotifyInferior) return;
+	if (ev->mode != NotifyNormal || ev->detail == NotifyInferior
+	    || ev->detail == NotifyNonlinearVirtual)
+		return;
+	if (ev->time == lasttime)
+		return;
 	Client *c = wintoclient(ev->window);
 	if (c && c != selmon->sel) {
-		focus(c, 1);
+		focus(c, 0);
 		selmon = c->mon;
 		drawbars();
+		lasttime = ev->time;
 	}
 }
 
