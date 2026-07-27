@@ -1602,16 +1602,12 @@ manage(Window w, XWindowAttributes *wa)
 		if (ch.res_name) XFree(ch.res_name);
 	}
 
-	/* set border and map before arranging so XRaiseWindow works */
+	/* map and focus the new window */
 	setborder(c, c->mon == selmon && ISVISIBLE(c, selmon->tags));
-	if (wa->map_state == IsViewable) {
-		XMapWindow(dpy, w);
-		XSync(dpy, False);
-	}
-	if (c->mon == selmon && ISVISIBLE(c, selmon->tags) && wa->map_state == IsViewable) {
+	XMapWindow(dpy, w);
+	XSync(dpy, False);
+	if (c->mon == selmon && ISVISIBLE(c, selmon->tags))
 		focus(c, 1);
-		XSync(dpy, False);
-	}
 	arrange(c->mon);
 	drawbars();
 }
