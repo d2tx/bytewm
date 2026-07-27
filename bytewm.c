@@ -320,7 +320,7 @@ xerror(Display *dpy, XErrorEvent *ee)
 		else
 			snprintf(logpath, sizeof(logpath), "/tmp/bytewm_crash.log");
 		int fd = open(logpath,
-		              O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW, 0644);
+		              O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW, 0600);
 		if (fd >= 0) {
 			dprintf(fd, "X error: %s (code %d) on 0x%lx req %d.%d\n",
 			        msg, ee->error_code, ee->resourceid,
@@ -1048,7 +1048,7 @@ drawbar(Monitor *m)
 			int avail = 140;
 			if (avail > 20 && textwidth(winname) > avail) {
 				int n = (int)strlen(winname);
-				while (n > 1 && textwidth(winname) + 14 > avail) {
+				while (n > 4 && textwidth(winname) + 14 > avail) {
 					winname[--n] = '\0';
 				}
 				strcpy(winname + n, "...");
@@ -2282,7 +2282,7 @@ sigsegv(int sig)
 	else
 		snprintf(logpath, sizeof(logpath), "/tmp/bytewm_crash.log");
 	int fd = open(logpath,
-	              O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW, 0644);
+	              O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW, 0600);
 	if (fd >= 0) {
 		char msg[64];
 		char *p = msg;
