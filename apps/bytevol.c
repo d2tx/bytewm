@@ -43,7 +43,7 @@ show_volume(int vol)
 	int bw = 100;
 	int w = tw + bw + 24;
 	int x = sw - w - 8;
-	int y = 24;
+	int y = 36;
 
 	XMoveResizeWindow(dpy, win, x, y, w, bh);
 	XMapRaised(dpy, win);

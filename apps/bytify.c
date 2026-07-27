@@ -50,7 +50,7 @@ draw(void)
 	}
 	int tw = XTextWidth(xfont, msg, strlen(msg));
 	int x = sw - POPUP_W - POPUP_MARGIN;
-	int y = 24;
+	int y = 36;
 
 	XMoveResizeWindow(dpy, win, x, y, POPUP_W, bh);
 	XMapRaised(dpy, win);

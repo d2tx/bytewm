@@ -125,7 +125,7 @@ draw(void)
 	if (winw < 320) winw = 320;
 	if (winw > 640) winw = 640;
 	int winx = (sw - winw) / 2;
-	int winy = 24;
+	int winy = (sh - height) / 2;
 
 	XMoveResizeWindow(dpy, win, winx, winy, winw, height);
 	XSetForeground(dpy, gc, bgcol);
