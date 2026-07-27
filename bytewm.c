@@ -136,6 +136,8 @@ typedef struct Monitor {
 	float mfact;
 	int layout;
 	struct Layout *lt[2];
+	int taglayout[8];
+	struct Layout *taglt[8][2];
 	Client *stack;
 } Monitor;
 
@@ -1353,14 +1355,33 @@ toggletag(const Arg *arg)
 	drawbars();
 }
 
+static int tagidx(unsigned int tag) {
+	int i;
+	for (i = 0; i < LENGTH(tags); i++)
+		if (tag & (1 << i))
+			return i;
+	return 0;
+}
+
 void
 view(const Arg *arg)
 {
 	unsigned int tag = arg->ui & TAGMASK;
 	if (!selmon) return;
 	if (tag && tag != selmon->tags) {
+		int oi = tagidx(selmon->tags);
+		selmon->taglayout[oi] = selmon->layout;
+		selmon->taglt[oi][0] = selmon->lt[0];
+		selmon->taglt[oi][1] = selmon->lt[1];
+
 		selmon->oldtags = selmon->tags;
 		selmon->tags = tag;
+
+		int ni = tagidx(selmon->tags);
+		selmon->layout = selmon->taglayout[ni];
+		selmon->lt[0] = selmon->taglt[ni][0];
+		selmon->lt[1] = selmon->taglt[ni][1];
+
 		focus(NULL, 1);
 		arrange(selmon);
 		drawbars();
@@ -2043,6 +2064,11 @@ createmon(int num, int x, int y, int w, int h)
 	m->lt[0] = (Layout *)&layouts[0];
 	m->lt[1] = (Layout *)&layouts[1];
 	m->layout = 0;
+	for (int i = 0; i < LENGTH(tags); i++) {
+		m->taglayout[i] = 0;
+		m->taglt[i][0] = (Layout *)&layouts[0];
+		m->taglt[i][1] = (Layout *)&layouts[1];
+	}
 	m->mx = x; m->my = y;
 	m->mw = w; m->mh = h;
 	m->wx = x;
