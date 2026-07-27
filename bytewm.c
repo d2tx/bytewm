@@ -33,6 +33,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <sys/wait.h>
+#include <poll.h>
 #include <unistd.h>
 
 /* macros */
@@ -305,19 +306,27 @@ xerrordummy(Display *dpy, XErrorEvent *ee)
 int
 xerror(Display *dpy, XErrorEvent *ee)
 {
-	char msg[256];
-	XGetErrorText(dpy, ee->error_code, msg, sizeof(msg));
-	int fd = open("/tmp/bytewm_crash.log",
-	              O_WRONLY | O_CREAT | O_APPEND, 0644);
-	if (fd >= 0) {
-		dprintf(fd, "X error: %s (code %d) on 0x%lx req %d.%d serial %lu\n",
-		        msg, ee->error_code, ee->resourceid,
-		        ee->request_code, ee->minor_code, ee->serial);
-		void *buf[32];
-		int n = backtrace(buf, sizeof(buf)/sizeof(buf[0]));
-		dprintf(fd, "backtrace:\n");
-		backtrace_symbols_fd(buf, n, fd);
-		close(fd);
+	static time_t last_xerr = 0;
+	time_t now = time(NULL);
+	if (now != last_xerr) {
+		last_xerr = now;
+		char msg[256];
+		XGetErrorText(dpy, ee->error_code, msg, sizeof(msg));
+		char *home = getenv("HOME");
+		char logpath[512];
+		if (home)
+			snprintf(logpath, sizeof(logpath),
+			         "%s/.cache/bytewm/crash.log", home);
+		else
+			snprintf(logpath, sizeof(logpath), "/tmp/bytewm_crash.log");
+		int fd = open(logpath,
+		              O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW, 0644);
+		if (fd >= 0) {
+			dprintf(fd, "X error: %s (code %d) on 0x%lx req %d.%d\n",
+			        msg, ee->error_code, ee->resourceid,
+			        ee->request_code, ee->minor_code);
+			close(fd);
+		}
 	}
 	if (ee->error_code == BadAccess)
 		die("bytewm: another window manager is already running\n");
@@ -435,6 +444,8 @@ updatenumlockmask(void)
 	XModifierKeymap *modmap;
 	numlockmask = 0;
 	modmap = XGetModifierMapping(dpy);
+	if (!modmap)
+		return;
 	for (int i = 0; i < 8; i++)
 		for (int j = 0; j < modmap->max_keypermod; j++)
 			if (modmap->modifiermap[i * modmap->max_keypermod + j]
@@ -1559,8 +1570,10 @@ manage(Window w, XWindowAttributes *wa)
 		unsigned char *p = NULL;
 		if (XGetWindowProperty(dpy, w, pidatom, 0L, 1L, False,
 			XA_CARDINAL, &real, &fmt, &n, &(unsigned long){0},
-			&p) == Success && p) {
+			&p) == Success && p && n >= 1 && fmt == 32) {
 			c->pid = *(pid_t *)p;
+			XFree(p);
+		} else if (p) {
 			XFree(p);
 		}
 	}
@@ -2151,7 +2164,7 @@ void
 autostart(void)
 {
 	char *home = getenv("HOME");
-	if (!home) home = "/tmp";
+	if (!home) return;
 
 	char dir[512];
 	snprintf(dir, sizeof(dir), "%s/.config/bytewm", home);
@@ -2200,7 +2213,7 @@ void
 updatestatus(void)
 {
 	char *home = getenv("HOME");
-	if (!home) home = "/tmp";
+	if (!home) return;
 
 	char path[512];
 	snprintf(path, sizeof(path), "%s/.config/bytewm/status.sh", home);
@@ -2229,11 +2242,8 @@ updatestatus(void)
 	{
 		FILE *fp = fdopen(pipefd[0], "r");
 		if (fp) {
-			fd_set fds;
-			FD_ZERO(&fds);
-			FD_SET(pipefd[0], &fds);
-			struct timeval tv = {2, 0};
-			if (select(pipefd[0] + 1, &fds, NULL, NULL, &tv) > 0) {
+			struct pollfd pfd = { .fd = pipefd[0], .events = POLLIN };
+			if (poll(&pfd, 1, 2000) > 0) {
 				if (fgets(status, sizeof(status), fp)) {
 					status[strcspn(status, "\n")] = '\0';
 					strncpy(status_cache, status, sizeof(status_cache) - 1);
@@ -2264,8 +2274,15 @@ fallback:
 void
 sigsegv(int sig)
 {
-	int fd = open("/tmp/bytewm_crash.log",
-	              O_WRONLY | O_CREAT | O_APPEND, 0644);
+	char *home = getenv("HOME");
+	char logpath[512];
+	if (home)
+		snprintf(logpath, sizeof(logpath),
+		         "%s/.cache/bytewm/crash.log", home);
+	else
+		snprintf(logpath, sizeof(logpath), "/tmp/bytewm_crash.log");
+	int fd = open(logpath,
+	              O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW, 0644);
 	if (fd >= 0) {
 		char msg[64];
 		char *p = msg;
@@ -2317,7 +2334,8 @@ static void strip_comment(char *s)
 static char *config_path(char *buf, size_t size, const char *file)
 {
 	char *home = getenv("HOME");
-	if (!home) home = "/tmp";
+	if (!home)
+		die("bytewm: HOME not set\n");
 	snprintf(buf, size, "%s/.config/bytewm/%s", home, file);
 	return buf;
 }
@@ -2528,11 +2546,8 @@ run(void)
 	while (running) {
 		time_t now = time(NULL);
 		if (!XPending(dpy)) {
-			fd_set fds;
-			FD_ZERO(&fds);
-			FD_SET(xfd, &fds);
-			struct timeval tv = {1, 0};
-			if (select(xfd + 1, &fds, NULL, NULL, &tv) < 0) {
+			struct pollfd pfd = { .fd = xfd, .events = POLLIN };
+			if (poll(&pfd, 1, 1000) < 0) {
 				if (errno == EINTR) continue;
 				break;
 			}
