@@ -39,7 +39,8 @@ str_mb:        .asciz  " GB"
 str_fallback:  .asciz  "Linux"
 
 # ── label strings ──────────────────────────────────────
-lbl_wm:        .asciz  "  \033[38;5;108mwm      \033[38;5;246m"
+lbl_pkgs:      .asciz  "  \033[38;5;108mpkgs    \033[38;5;246m"
+lbl_wm:         .asciz  "  \033[38;5;108mwm      \033[38;5;246m"
 lbl_os:        .asciz  "  \033[38;5;108mos      \033[38;5;246m"
 lbl_kernel:    .asciz  "  \033[38;5;108mkernel  \033[38;5;246m"
 lbl_uptime:    .asciz  "  \033[38;5;108muptime  \033[38;5;246m"
@@ -62,7 +63,8 @@ buf_uptime:    .fill   256, 1, 0
 out_host:      .fill   65, 1, 0
 out_kernel:    .fill   65, 1, 0
 out_cpu:       .fill   128, 1, 0
-out_wm:        .fill   32, 1, 0
+out_pkgs:       .fill   32, 1, 0
+out_wm:         .fill   32, 1, 0
 out_gpu:       .fill   32, 1, 0
 out_os:        .fill   128, 1, 0
 out_uptime:    .fill   32, 1, 0
@@ -822,6 +824,81 @@ dw_proc:    .asciz  "/proc"
 .section .text
 
 # ═══════════════════════════════════════════════════════
+#  COUNT PACKAGES (getdents64 on /var/lib/pacman/local)
+# ═══════════════════════════════════════════════════════
+
+count_packages:
+    pushq   %r12
+    pushq   %r13
+    pushq   %r14
+    pushq   %r15
+    pushq   %rbx
+
+    # open /var/lib/pacman/local
+    movq    $2, %rax
+    leaq    pk_path(%rip), %rdi
+    xorq    %rsi, %rsi
+    xorq    %rdx, %rdx
+    syscall
+    cmpq    $0, %rax
+    jl      pk_done
+    movq    %rax, %r12
+
+    xorq    %r13, %r13               # r13 = count
+
+pk_readdir:
+    movq    $217, %rax               # getdents64
+    movq    %r12, %rdi
+    leaq    buf_osrel(%rip), %rsi
+    movq    $4096, %rdx
+    syscall
+    cmpq    $0, %rax
+    jle     pk_close
+
+    movq    %rax, %r14               # r14 = bytes read
+    xorq    %rbx, %rbx
+
+pk_entry:
+    cmpq    %r14, %rbx
+    jge     pk_readdir
+
+    leaq    buf_osrel(%rip), %r15
+    addq    %rbx, %r15
+    cmpb    $4, 18(%r15)          # d_type == DT_DIR?
+    jne     pk_next
+    cmpb    $'.', 19(%r15)        # skip . and ..
+    je      pk_next
+    incq    %r13
+
+pk_next:
+    movzwq  16(%r15), %rcx
+    addq    %rcx, %rbx
+    jmp     pk_entry
+
+pk_close:
+    movq    $3, %rax
+    movq    %r12, %rdi
+    syscall
+
+    # convert count to string in out_pkgs
+    movq    %r13, %rax
+    leaq    out_pkgs(%rip), %rsi
+    call    itoa
+
+pk_done:
+    popq    %rbx
+    popq    %r15
+    popq    %r14
+    popq    %r13
+    popq    %r12
+    ret
+
+.section .rodata
+pk_path:    .asciz  "/var/lib/pacman/local"
+
+.section .text
+
+# ═══════════════════════════════════════════════════════
 #  GATHER SYSTEM INFO
 # ═══════════════════════════════════════════════════════
 
@@ -830,6 +907,9 @@ gather_sys:
 
     # ── detect WM by scanning /proc ──
     call    detect_wm
+
+    # ── count packages ──
+    call    count_packages
 
     # ── detect GPU ──
     call    gather_gpu
@@ -1169,6 +1249,11 @@ _start:
     movq    $1, %rdi
     leaq    lbl_wm(%rip), %rsi
     leaq    out_wm(%rip), %rdx
+    call    print_labeled
+
+    movq    $1, %rdi
+    leaq    lbl_pkgs(%rip), %rsi
+    leaq    out_pkgs(%rip), %rdx
     call    print_labeled
 
     movq    $1, %rdi
