@@ -19,6 +19,7 @@ read -p "Install AMD GPU drivers?        [y/N] " amd
 read -p "Install NVIDIA drivers?          [y/N] " nv
 read -p "Install 32-bit libraries?        [y/N] " m32
 read -p "Install Wine + Winetricks?       [y/N] " wine
+read -p "Install umu-launcher (Proton runner)? [y/N] " um
 read -p "Install Steam/Lutris/MangoHud?   [y/N] " st
 read -p "Install PipeWire audio?          [y/N] " pw
 read -p "Install gamepad support?         [y/N] " gp
@@ -48,6 +49,12 @@ fi
 if [ "$wine" = "y" ] || [ "$wine" = "Y" ]; then
   echo "==> Wine"
   install wine-staging winetricks
+fi
+
+# ── umu-launcher ─────────────────────────────────────────
+if [ "$um" = "y" ] || [ "$um" = "Y" ]; then
+  echo "==> umu-launcher"
+  install umu-launcher
 fi
 
 # ── Gaming tools ─────────────────────────────────────────
@@ -87,5 +94,6 @@ echo ""
 echo "============================================"
 echo "  Gaming setup complete!"
 [ "$st" = "y" ] || [ "$st" = "Y" ] && echo "  Steam: gamemoderun mangohud %command%"
+[ "$um" = "y" ] || [ "$um" = "Y" ] && echo "  umu:    gamemoderun umu-run game.exe"
 [ "$ac" = "y" ] || [ "$ac" = "Y" ] && echo "  asus:   asusctl profile -p Performance"
 echo "============================================"
