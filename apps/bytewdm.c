@@ -317,10 +317,10 @@ startx(void)
 		if (open("/dev/null", O_WRONLY) < 0) _exit(1);
 		if (open("/dev/null", O_WRONLY) < 0) _exit(1);
 		setsid();
-		execlp("X", "X", display_str, "-keeptty", "-novtswitch",
-		       "-logfile", "/dev/null", NULL);
-		execlp("Xorg", "Xorg", display_str, "-keeptty", "-novtswitch",
-		       "-logfile", "/dev/null", NULL);
+		execl("/usr/bin/X", "X", display_str, "-keeptty", "-novtswitch",
+		      "-logfile", "/dev/null", NULL);
+		execl("/usr/bin/Xorg", "Xorg", display_str, "-keeptty", "-novtswitch",
+		      "-logfile", "/dev/null", NULL);
 		_exit(1);
 	}
 	if (xpid < 0) {
@@ -416,6 +416,8 @@ runsession(void)
 		if (open("/dev/null", O_WRONLY) < 0) _exit(1);
 		setsid();
 
+		clearenv();
+		setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);
 		setenv("DISPLAY", display_str, 1);
 		setenv("HOME", pw->pw_dir, 1);
 		setenv("USER", pw->pw_name, 1);
@@ -424,7 +426,6 @@ runsession(void)
 		chdir(pw->pw_dir);
 
 		/* drop root privileges */
-		setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);
 		if (initgroups(pw->pw_name, pw->pw_gid) != 0)
 			_exit(1);
 		if (setgid(pw->pw_gid) != 0)
