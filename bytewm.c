@@ -489,7 +489,10 @@ grabbuttons(Client *c, int focused)
 {
 	unsigned int mods[] = { 0, LockMask, numlockmask, numlockmask | LockMask };
 	XUngrabButton(dpy, AnyButton, AnyModifier, c->win);
-	if (!focused)
+	if (focused)
+		XGrabButton(dpy, AnyButton, AnyModifier, c->win, False,
+			BUTTONMASK, GrabModeSync, GrabModeSync, None, None);
+	else
 		XGrabButton(dpy, AnyButton, AnyModifier, c->win, False,
 			BUTTONMASK, GrabModeSync, GrabModeAsync, None, None);
 	for (int i = 0; i < LENGTH(buttons); i++) {
@@ -663,7 +666,8 @@ applyrules(Client *c)
 		if ((!rules[i].title || wintitlematch(c, rules[i].title))
 		    && (!rules[i].class || (cls && !strcmp(rules[i].class, cls)))
 		    && (!rules[i].instance || (inst && !strcmp(rules[i].instance, inst)))) {
-			c->isfloating = rules[i].isfloating;
+			if (rules[i].isfloating)
+				c->isfloating = 1;
 			c->tags |= rules[i].tags;
 		}
 	}
@@ -1493,6 +1497,7 @@ togglefloating(const Arg *arg)
 	if (!selmon->sel) return;
 	Client *c = selmon->sel;
 	c->isfloating = !c->isfloating;
+	c->autofloat = 0;
 	c->bw = c->isfloating ? 1 : borderpx;
 	XSetWindowBorderWidth(dpy, c->win, c->bw);
 	if (c->isfloating) {
