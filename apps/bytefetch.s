@@ -226,7 +226,7 @@ print_logo_line:
     pushq   %r12
     movq    %rdi, %r12
 
-    leaq    clr_orange(%rip), %rsi
+    leaq    clr_yellow(%rip), %rsi
     movq    $11, %rdx
     movq    $1, %rdi
     call    print_raw
@@ -1328,60 +1328,60 @@ _start:
     leaq    str_newline(%rip), %rsi
     call    printz
 
-    # ── info lines with logo ──
-    leaq    arch_logo_0(%rip), %rdi
-    call    print_logo_line
+    # ── os (no logo) ──
+    leaq    logo_pad(%rip), %rsi
+    movq    $1, %rdi
+    call    printz
     movq    $1, %rdi
     leaq    lbl_os(%rip), %rsi
     leaq    out_os(%rip), %rdx
     call    print_labeled
 
-    leaq    arch_logo_1(%rip), %rdi
+    # ── info lines with logo ──
+    leaq    arch_logo_0(%rip), %rdi
     call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_wm(%rip), %rsi
     leaq    out_wm(%rip), %rdx
     call    print_labeled
 
-    leaq    arch_logo_2(%rip), %rdi
+    leaq    arch_logo_1(%rip), %rdi
     call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_pkgs(%rip), %rsi
     leaq    out_pkgs(%rip), %rdx
     call    print_labeled
 
-    leaq    arch_logo_3(%rip), %rdi
+    leaq    arch_logo_2(%rip), %rdi
     call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_kernel(%rip), %rsi
     leaq    out_kernel(%rip), %rdx
     call    print_labeled
 
-    leaq    arch_logo_4(%rip), %rdi
+    leaq    arch_logo_3(%rip), %rdi
     call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_uptime(%rip), %rsi
     leaq    out_uptime(%rip), %rdx
     call    print_labeled
 
-    leaq    arch_logo_5(%rip), %rdi
+    leaq    arch_logo_4(%rip), %rdi
     call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_cpu(%rip), %rsi
     leaq    out_cpu(%rip), %rdx
     call    print_labeled
 
-    leaq    arch_logo_6(%rip), %rdi
+    leaq    arch_logo_5(%rip), %rdi
     call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_gpu(%rip), %rsi
     leaq    out_gpu(%rip), %rdx
     call    print_labeled
 
-    # ── mem (no logo) ──
-    leaq    logo_pad(%rip), %rsi
-    movq    $1, %rdi
-    call    printz
+    leaq    arch_logo_6(%rip), %rdi
+    call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_mem(%rip), %rsi
     leaq    out_mem(%rip), %rdx
