@@ -254,6 +254,7 @@ unsigned int numlockmask = 0;
 int (*xerrorxlib)(Display *, XErrorEvent *);
 volatile sig_atomic_t running = 1;
 static volatile sig_atomic_t restart = 0;
+static char crash_logpath[512];
 static int showdate = 0;
 XftFont *xfont;
 XFontStruct *xfont_core;
@@ -1566,10 +1567,10 @@ tagmon(const Arg *arg)
 	if (!selmon->sel) return;
 	Monitor *m = dirtomon(arg->i);
 	if (m) {
-	Client *c = selmon->sel;
-	c->node = NULL;  /* arrange() will rebuild the BSP tree */
-	detach(c);
-	detachstack(c);
+		Client *c = selmon->sel;
+		c->node = NULL;  /* arrange() will rebuild the BSP tree */
+		detach(c);
+		detachstack(c);
 		c->mon = m;
 		attach(c);
 		attachstack(c);
@@ -1907,7 +1908,6 @@ configurerequest(XEvent *e)
 		XConfigureWindow(dpy, ev->window, ev->value_mask, &wc);
 	}
 	XSync(dpy, False);
-	XSetErrorHandler(xerror);
 }
 
 void
@@ -2359,14 +2359,7 @@ fallback:
 void
 sigsegv(int sig)
 {
-	char *home = getenv("HOME");
-	char logpath[512];
-	if (home)
-		snprintf(logpath, sizeof(logpath),
-		         "%s/.cache/bytewm/crash.log", home);
-	else
-		snprintf(logpath, sizeof(logpath), "/tmp/bytewm_crash.log");
-	int fd = open(logpath,
+	int fd = open(crash_logpath[0] ? crash_logpath : "/tmp/bytewm_crash.log",
 	              O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW, 0600);
 	if (fd >= 0) {
 		char msg[64];
@@ -2556,6 +2549,8 @@ void
 			mkdir(dir, 0755);
 			snprintf(dir, sizeof(dir), "%s/.cache/bytewm", home);
 			mkdir(dir, 0755);
+			snprintf(crash_logpath, sizeof(crash_logpath),
+			         "%s/.cache/bytewm/crash.log", home);
 		}
 	}
 
@@ -2646,8 +2641,6 @@ void
 run(void)
 {
 	signal(SIGHUP, sighup);
-	signal(SIGSEGV, sigsegv);
-	signal(SIGABRT, sigsegv);
 
 	int xfd = ConnectionNumber(dpy);
 	time_t last_update = 0;
@@ -2745,6 +2738,9 @@ main(int argc, char *argv[])
 		sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
 		sigaction(SIGCHLD, &sa, NULL);
 	}
+
+	signal(SIGSEGV, sigsegv);
+	signal(SIGABRT, sigsegv);
 
 	checkotherwm();
 	setup();
