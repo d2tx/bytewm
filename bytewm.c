@@ -2234,7 +2234,8 @@ scan(void)
 		for (unsigned int i = 0; i < nw; i++) {
 			XWindowAttributes wa;
 			if (!XGetWindowAttributes(dpy, wins[i], &wa)
-			    || wa.override_redirect)
+			    || wa.override_redirect
+			    || wa.map_state != IsViewable)
 				continue;
 			manage(wins[i], &wa);
 		}
@@ -2403,6 +2404,7 @@ sighup(int unused)
 
 static char *trim(char *s)
 {
+	if (!*s) return s;
 	while (*s == ' ' || *s == '\t') s++;
 	char *end = s + strlen(s) - 1;
 	while (end > s && (*end == ' ' || *end == '\t' || *end == '\n')) end--;
@@ -2494,6 +2496,7 @@ static void config_parse(void)
 
 		if (!strcmp(key, "font")) {
 			strncpy(font, val, sizeof(font) - 1);
+			font[sizeof(font) - 1] = '\0';
 		} else 		if (!strcmp(key, "color.normfg")) {
 			strncpy(colors[SchemeNorm][ColFG], val, 15);
 			colors[SchemeNorm][ColFG][15] = '\0';
@@ -2725,8 +2728,10 @@ cleanup(void)
 int
 main(int argc, char *argv[])
 {
-	if (argc == 2 && !strcmp(argv[1], "-v"))
-		die("bytewm-" VERSION "\n");
+	if (argc == 2 && !strcmp(argv[1], "-v")) {
+		puts("bytewm-" VERSION);
+		return 0;
+	}
 
 	if (!(dpy = XOpenDisplay(NULL)))
 		die("bytewm: could not open display\n");
