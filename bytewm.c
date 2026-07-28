@@ -55,7 +55,8 @@
 enum { CurNormal, CurResize, CurMove, CurLast };
 enum { ColFG, ColBG, ColLast };
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
-       NetWMFullscreen, NetActiveWindow, NetClientList, NetLast };
+       NetWMFullscreen, NetActiveWindow, NetClientList,
+       NetWMDesktop, NetNumberOfDesktops, NetCurrentDesktop, NetLast };
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast };
 enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
        ClkClientWin, ClkRootWin, ClkLast };
@@ -236,6 +237,7 @@ static void updatesizehints(Client *c);
 static void updatestatus(void);
 static void view(const Arg *arg);
 static void viewprevtag(const Arg *arg);
+static int tagidx(unsigned int tag);
 static Client *wintoclient(Window w);
 static int wintitlematch(Client *c, const char *title);
 static int xerror(Display *dpy, XErrorEvent *ee);
@@ -1383,11 +1385,21 @@ swapclients(const Arg *arg)
 	drawbars();
 }
 
+static void
+setwmdesktop(Client *c)
+{
+	if (!c) return;
+	unsigned long idx = (c->tags == TAGMASK) ? 0xFFFFFFFFUL : tagidx(c->tags);
+	XChangeProperty(dpy, c->win, netatom[NetWMDesktop], XA_CARDINAL, 32,
+		PropModeReplace, (unsigned char *)&idx, 1);
+}
+
 void
 tag(const Arg *arg)
 {
 	if (selmon->sel && arg->ui & TAGMASK) {
 		selmon->sel->tags = arg->ui & TAGMASK;
+		setwmdesktop(selmon->sel);
 		focus(NULL, 0);
 		arrange(selmon);
 		drawbars();
@@ -1416,12 +1428,15 @@ toggletag(const Arg *arg)
 			return;
 		}
 	}
+	setwmdesktop(c);
 	focus(NULL, 0);
 	arrange(selmon);
 	drawbars();
 }
 
-static int tagidx(unsigned int tag) {
+static int
+tagidx(unsigned int tag)
+{
 	int i;
 	for (i = 0; i < LENGTH(tags); i++)
 		if (tag & (1 << i))
@@ -1453,6 +1468,12 @@ view(const Arg *arg)
 		focus(NULL, 1);
 		arrange(selmon);
 		drawbars();
+
+		if (selmon->tags != TAGMASK) {
+			unsigned long cdt = tagidx(selmon->tags);
+			XChangeProperty(dpy, root, netatom[NetCurrentDesktop], XA_CARDINAL, 32,
+				PropModeReplace, (unsigned char *)&cdt, 1);
+		}
 	}
 }
 
@@ -1674,6 +1695,8 @@ manage(Window w, XWindowAttributes *wa)
 		if (ch.res_class) XFree(ch.res_class);
 		if (ch.res_name) XFree(ch.res_name);
 	}
+
+	setwmdesktop(c);
 
 	/* map and focus the new window */
 	setborder(c, c->mon == selmon && ISVISIBLE(c, selmon->tags));
@@ -2002,8 +2025,16 @@ propertynotify(XEvent *e)
 			arrange(c->mon);
 		}
 	}
-	if (ev->atom == netatom[NetWMName])
+	if (ev->atom == netatom[NetWMName]) {
+		unsigned int oldtags = c->tags;
+		int oldfloating = c->isfloating;
+		applyrules(c);
+		if (c->tags != oldtags || c->isfloating != oldfloating) {
+			setwmdesktop(c);
+			arrange(c->mon);
+		}
 		drawbars();
+	}
 	if (ev->atom == XA_WM_NORMAL_HINTS)
 		updatesizehints(c);
 	if (ev->atom == XA_WM_HINTS) {
@@ -2665,6 +2696,9 @@ void
 	netatom[NetWMFullscreen]  = getatom("_NET_WM_STATE_FULLSCREEN");
 	netatom[NetActiveWindow]  = getatom("_NET_ACTIVE_WINDOW");
 	netatom[NetClientList]    = getatom("_NET_CLIENT_LIST");
+	netatom[NetWMDesktop]     = getatom("_NET_WM_DESKTOP");
+	netatom[NetNumberOfDesktops] = getatom("_NET_NUMBER_OF_DESKTOPS");
+	netatom[NetCurrentDesktop]   = getatom("_NET_CURRENT_DESKTOP");
 
 	wmatom[WMProtocols]       = getatom("WM_PROTOCOLS");
 	wmatom[WMDelete]          = getatom("WM_DELETE_WINDOW");
@@ -2687,6 +2721,13 @@ void
 		PropModeReplace, (unsigned char *)&root, 1);
 	XChangeProperty(dpy, root, netatom[NetWMName], XInternAtom(dpy, "UTF8_STRING", False), 8,
 		PropModeReplace, (unsigned char *)"bytewm", 6);
+	{
+		unsigned long ndesks = LENGTH(tags);
+		XChangeProperty(dpy, root, netatom[NetNumberOfDesktops], XA_CARDINAL, 32,
+			PropModeReplace, (unsigned char *)&ndesks, 1);
+	}
+	XChangeProperty(dpy, root, netatom[NetCurrentDesktop], XA_CARDINAL, 32,
+		PropModeReplace, (unsigned char *)&(unsigned long){0}, 1);
 
 	updatenumlockmask();
 	grabkeys();
