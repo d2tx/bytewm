@@ -1,23 +1,22 @@
-/* gruvbox dark theme */
-static const char col_dimbg[]    = "#3c3836";
+/* gruvbox dark theme (overridable via ~/.config/bytewm/config) */
+static char col_dimbg[16]    = "#3c3836";
 
-static const char colors[SchemeLast][ColLast][16] = {
+static char colors[SchemeLast][ColLast][16] = {
 	[SchemeNorm] = { "#ebdbb2", "#282828" },
 	[SchemeSel]  = { "#282828", "#689d6a" },
 	[SchemeTag]  = { "#d65d0e", "#282828" },
 	[SchemeUrg]  = { "#282828", "#cc241d" },
 };
 
-static const char *font = "fixed";
+static char font[64] = "fixed";
 
-static const unsigned int borderpx  = 2;
-static const unsigned int gappx     = 6;
-static const unsigned int gappoh    = 6;
-static const unsigned int gappoi    = 6;
-static const unsigned int barheight = 20;
-static int               showbar    = 1;
-static const int         topbar     = 1;
-
+static unsigned int borderpx  = 6;
+static unsigned int gappx     = 6;
+static unsigned int gappoh    = 6;
+static unsigned int gappoi    = 6;
+static unsigned int barheight = 30;
+static int            showbar  = 1;
+static int            topbar   = 1;
 
 #define MODKEY Mod4Mask
 #define TAGKEYS(KEY,TAG) \
@@ -32,8 +31,8 @@ static const Rule rules[] = {
 	{ "st-256color", NULL,       NULL,        0,         0 },
 };
 
-static const float mfact     = 0.55;
-static const int   nmaster   = 1;
+static float mfact     = 0.55;
+static int   nmaster   = 1;
 
 static const Layout layouts[] = {
 	{ "[=]",      tile },
@@ -81,7 +80,9 @@ static const Key keys[] = {
 	{ MODKEY|ShiftMask,             XK_Up,     resizearrow,    {.i = 2 } },
 	{ MODKEY|ShiftMask,             XK_Down,   resizearrow,    {.i = 3 } },
 	{ MODKEY,                       XK_Tab,    viewprevtag,    {.v = NULL } },
-	{ MODKEY,                       XK_c,      killclient,     {.v = NULL } },
+	{ MODKEY|ShiftMask,             XK_Tab,    spawn,          {.v = (char *[]){"byteswitch", NULL} } },
+	{ Mod1Mask,                     XK_Tab,    spawn,          {.v = (char *[]){"byteswitch", NULL} } },
+	{ MODKEY,                       XK_w,      killclient,     {.v = NULL } },
 
 	{ MODKEY,                       XK_t,      setlayout,      {.v = &layouts[0] } },
 	{ MODKEY,                       XK_b,      setlayout,      {.v = &layouts[1] } },
@@ -101,7 +102,8 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_comma,  tagmon,         {.i = -1 } },
 	{ MODKEY,                       XK_period, tagmon,         {.i = +1 } },
 
-	{ MODKEY,                       XK_q,      spawn,          {.v = (char *[]){"bytewm-exit", NULL} } },
+	{ MODKEY|ShiftMask,             XK_q,      spawn,          {.v = (char *[]){"bytewm-exit", NULL} } },
+	{ MODKEY|ShiftMask,             XK_r,      spawn,          {.v = (char *[]){"pkill", "-HUP", "bytewm", NULL} } },
 
 	TAGKEYS(                        XK_1,                      0)
 	TAGKEYS(                        XK_2,                      1)
