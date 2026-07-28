@@ -18,7 +18,6 @@ static const unsigned int barheight = 20;
 static int               showbar    = 1;
 static const int         topbar     = 1;
 
-static const int swallowfloating = 0;  /* 1 = swallow even floating terminals */
 
 #define MODKEY Mod4Mask
 #define TAGKEYS(KEY,TAG) \
@@ -69,7 +68,6 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_d,      incnmaster,     {.i = -1 } },
 	{ MODKEY,                       XK_h,      setmfact,       {.f = -0.05 } },
 	{ MODKEY,                       XK_l,      setmfact,       {.f = +0.05 } },
-	{ MODKEY,                       XK_g,      setmfact,       {.f = +0.05 } },
 	{ MODKEY|ControlMask,          XK_h,      setcfact,       {.f = -0.05 } },
 	{ MODKEY|ControlMask,          XK_g,      setcfact,       {.f = +0.05 } },
 
@@ -98,7 +96,7 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_F12,    spawn,          {.v = (char *[]){"/bin/sh","-c","amixer set Master toggle >/dev/null 2>&1",NULL} } },
 	{ MODKEY|ShiftMask,             XK_v,      spawn,          {.v = (char *[]){"/bin/sh","-c","bytevol $(amixer get Master | tail -1 | sed 's/.*\\[\\([0-9]*\\)%\\].*/\\1/')",NULL} } },
 	{ MODKEY,                       XK_0,      view,           {.ui = ~0 } },
-	{ MODKEY|ShiftMask,             XK_0,      tag,            {.ui = ~0 } },
+	{ MODKEY|ShiftMask,             XK_0,      toggletag,      {.ui = ~0 } },
 
 	{ MODKEY,                       XK_comma,  tagmon,         {.i = -1 } },
 	{ MODKEY,                       XK_period, tagmon,         {.i = +1 } },

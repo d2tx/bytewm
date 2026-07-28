@@ -101,7 +101,7 @@ typedef struct Client {
 	int oldx, oldy, oldw, oldh;
 	int basew, baseh, incw, inch, maxw, maxh, minw, minh;
 	int bw, oldbw;
-	unsigned int tags;
+	unsigned int tags, oldtags;
 	int isfixed, isfloating, isurgent, isfullscreen;
 	int neverfocus;
 	int oldstate;
@@ -1396,12 +1396,26 @@ void
 toggletag(const Arg *arg)
 {
 	if (!selmon || !selmon->sel) return;
-	unsigned int newtags = selmon->sel->tags ^ (arg->ui & TAGMASK);
-	if (newtags) {
-		selmon->sel->tags = newtags;
-		focus(NULL, 0);
-		arrange(selmon);
+	Client *c = selmon->sel;
+	unsigned int mask = arg->ui & TAGMASK;
+
+	if (mask == TAGMASK) {
+		if (c->tags == TAGMASK) {
+			c->tags = c->oldtags;
+		} else {
+			c->oldtags = c->tags;
+			c->tags = TAGMASK;
+		}
+	} else {
+		unsigned int newtags = c->tags ^ mask;
+		if (newtags) {
+			c->tags = newtags;
+		} else {
+			return;
+		}
 	}
+	focus(NULL, 0);
+	arrange(selmon);
 	drawbars();
 }
 
@@ -1419,18 +1433,20 @@ view(const Arg *arg)
 	unsigned int tag = arg->ui & TAGMASK;
 	if (!selmon) return;
 	if (tag && tag != selmon->tags) {
-		int oi = tagidx(selmon->tags);
-		selmon->taglayout[oi] = selmon->layout;
-		selmon->taglt[oi][0] = selmon->lt[0];
-		selmon->taglt[oi][1] = selmon->lt[1];
-
 		selmon->oldtags = selmon->tags;
 		selmon->tags = tag;
 
-		int ni = tagidx(selmon->tags);
-		selmon->layout = selmon->taglayout[ni];
-		selmon->lt[0] = selmon->taglt[ni][0];
-		selmon->lt[1] = selmon->taglt[ni][1];
+		if (tag != TAGMASK) {
+			int oi = tagidx(selmon->oldtags);
+			selmon->taglayout[oi] = selmon->layout;
+			selmon->taglt[oi][0] = selmon->lt[0];
+			selmon->taglt[oi][1] = selmon->lt[1];
+
+			int ni = tagidx(selmon->tags);
+			selmon->layout = selmon->taglayout[ni];
+			selmon->lt[0] = selmon->taglt[ni][0];
+			selmon->lt[1] = selmon->taglt[ni][1];
+		}
 
 		focus(NULL, 1);
 		arrange(selmon);
@@ -1583,6 +1599,8 @@ manage(Window w, XWindowAttributes *wa)
 
 	updatesizehints(c);
 	applyrules(c);
+
+	c->oldtags = c->tags;
 
 	/* detect transient windows (dialogs) and float them */
 	{
@@ -2132,7 +2150,7 @@ createmon(int num, int x, int y, int w, int h)
 	m->lt[0] = (Layout *)&layouts[0];
 	m->lt[1] = (Layout *)&layouts[1];
 	m->layout = 0;
-	for (int i = 0; i < LENGTH(tags); i++) {
+	for (unsigned int i = 0; i < LENGTH(tags); i++) {
 		m->taglayout[i] = 0;
 		m->taglt[i][0] = (Layout *)&layouts[0];
 		m->taglt[i][1] = (Layout *)&layouts[1];
