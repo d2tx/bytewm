@@ -237,6 +237,7 @@ static void viewprevtag(const Arg *arg);
 static Client *wintoclient(Window w);
 static int wintitlematch(Client *c, const char *title);
 static int xerror(Display *dpy, XErrorEvent *ee);
+static int xerrorstart(Display *dpy, XErrorEvent *ee);
 static int xerrordummy(Display *dpy, XErrorEvent *ee);
 static void zoom(const Arg *arg);
 
@@ -328,15 +329,20 @@ xerror(Display *dpy, XErrorEvent *ee)
 			close(fd);
 		}
 	}
-	if (ee->error_code == BadAccess)
-		die("bytewm: another window manager is already running\n");
 	return 0;
+}
+
+int
+xerrorstart(Display *dpy, XErrorEvent *ee)
+{
+	(void)dpy; (void)ee;
+	die("bytewm: another window manager is already running\n");
 }
 
 void
 checkotherwm(void)
 {
-	xerrorxlib = XSetErrorHandler(xerror);
+	xerrorxlib = XSetErrorHandler(xerrorstart);
 	XSelectInput(dpy, root, SubstructureRedirectMask);
 	XSync(dpy, 0);
 	XSetErrorHandler(xerrordummy);
@@ -1595,10 +1601,9 @@ manage(Window w, XWindowAttributes *wa)
 		if ((ch.res_class && strcmp(ch.res_class, "scratchpad") == 0)
 		    || (ch.res_name && strcmp(ch.res_name, "scratchpad") == 0)) {
 			if (scratchpad && scratchpad != c) {
-				XUnmapWindow(dpy, scratchpad->win);
-				detach(scratchpad);
-				detachstack(scratchpad);
-				free(scratchpad);
+				Client *old = scratchpad;
+				scratchpad = NULL;
+				unmanage(old, 0);
 			}
 			scratchpad = c;
 			scratchpad->tags = 0;
@@ -2406,24 +2411,33 @@ static void config_parse(void)
 
 		if (!strcmp(key, "font")) {
 			strncpy(font, val, sizeof(font) - 1);
-		} else if (!strcmp(key, "color.normfg")) {
+		} else 		if (!strcmp(key, "color.normfg")) {
 			strncpy(colors[SchemeNorm][ColFG], val, 15);
+			colors[SchemeNorm][ColFG][15] = '\0';
 		} else if (!strcmp(key, "color.normbg")) {
 			strncpy(colors[SchemeNorm][ColBG], val, 15);
+			colors[SchemeNorm][ColBG][15] = '\0';
 		} else if (!strcmp(key, "color.selfg")) {
 			strncpy(colors[SchemeSel][ColFG], val, 15);
+			colors[SchemeSel][ColFG][15] = '\0';
 		} else if (!strcmp(key, "color.selbg")) {
 			strncpy(colors[SchemeSel][ColBG], val, 15);
+			colors[SchemeSel][ColBG][15] = '\0';
 		} else if (!strcmp(key, "color.tagfg")) {
 			strncpy(colors[SchemeTag][ColFG], val, 15);
+			colors[SchemeTag][ColFG][15] = '\0';
 		} else if (!strcmp(key, "color.tagbg")) {
 			strncpy(colors[SchemeTag][ColBG], val, 15);
+			colors[SchemeTag][ColBG][15] = '\0';
 		} else if (!strcmp(key, "color.urgfg")) {
 			strncpy(colors[SchemeUrg][ColFG], val, 15);
+			colors[SchemeUrg][ColFG][15] = '\0';
 		} else if (!strcmp(key, "color.urgbg")) {
 			strncpy(colors[SchemeUrg][ColBG], val, 15);
+			colors[SchemeUrg][ColBG][15] = '\0';
 		} else if (!strcmp(key, "color.unfgborder")) {
 			strncpy(col_dimbg, val, 15);
+			col_dimbg[15] = '\0';
 		} else if (!strcmp(key, "barheight")) {
 			barheight = (unsigned int)atoi(val);
 		} else if (!strcmp(key, "borderpx")) {

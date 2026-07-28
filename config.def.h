@@ -1,22 +1,11 @@
 /* gruvbox dark theme */
-static const char col_bg[]       = "#282828";
-static const char col_fg[]       = "#ebdbb2";
-static const char col_black[]    = "#1d2021";
-static const char col_red[]      = "#cc241d";
-static const char col_green[]    = "#98971a";
-static const char col_yellow[]   = "#d79921";
-static const char col_blue[]     = "#458588";
-static const char col_purple[]   = "#b16286";
-static const char col_aqua[]     = "#689d6a";
-static const char col_orange[]   = "#d65d0e";
-static const char col_gray[]     = "#a89984";
 static const char col_dimbg[]    = "#3c3836";
 
-static const char *colors[][2] = {
-	[SchemeNorm] = { col_fg, col_bg },
-	[SchemeSel]  = { col_bg, col_aqua },
-	[SchemeTag]  = { col_orange, col_bg },
-	[SchemeUrg]  = { col_bg, col_red },
+static const char colors[SchemeLast][ColLast][16] = {
+	[SchemeNorm] = { "#ebdbb2", "#282828" },
+	[SchemeSel]  = { "#282828", "#689d6a" },
+	[SchemeTag]  = { "#d65d0e", "#282828" },
+	[SchemeUrg]  = { "#282828", "#cc241d" },
 };
 
 static const char *font = "fixed";

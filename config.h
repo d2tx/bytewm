@@ -1,22 +1,11 @@
 /* gruvbox dark theme (overridable via ~/.config/bytewm/config) */
-static char col_bg[16]       = "#282828";
-static char col_fg[16]       = "#ebdbb2";
-static char col_black[16]    = "#1d2021";
-static char col_red[16]      = "#cc241d";
-static char col_green[16]    = "#98971a";
-static char col_yellow[16]   = "#d79921";
-static char col_blue[16]     = "#458588";
-static char col_purple[16]   = "#b16286";
-static char col_aqua[16]     = "#689d6a";
-static char col_orange[16]   = "#d65d0e";
-static char col_gray[16]     = "#a89984";
 static char col_dimbg[16]    = "#3c3836";
 
-static char *colors[SchemeLast][2] = {
-	[SchemeNorm] = { col_fg, col_bg },
-	[SchemeSel]  = { col_bg, col_aqua },
-	[SchemeTag]  = { col_orange, col_bg },
-	[SchemeUrg]  = { col_bg, col_red },
+static char colors[SchemeLast][ColLast][16] = {
+	[SchemeNorm] = { "#ebdbb2", "#282828" },
+	[SchemeSel]  = { "#282828", "#689d6a" },
+	[SchemeTag]  = { "#d65d0e", "#282828" },
+	[SchemeUrg]  = { "#282828", "#cc241d" },
 };
 
 static char font[64] = "fixed";
