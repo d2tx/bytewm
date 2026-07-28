@@ -374,13 +374,17 @@ gettextprop(Window w, Atom atom, char *text, unsigned int size)
 	XSync(dpy, False);
 	XSetErrorHandler(prev);
 	if (name.encoding == XA_STRING) {
-		strncpy(text, (char *)name.value, size - 1);
+		size_t len = MIN((size_t)name.nitems, (size_t)size - 1);
+		memcpy(text, name.value, len);
+		text[len] = '\0';
 	} else if (XmbTextPropertyToTextList(dpy, &name, &list, &n) >= Success
 	           && n > 0 && *list) {
 		strncpy(text, *list, size - 1);
+		text[size - 1] = '\0';
 		XFreeStringList(list);
+	} else {
+		text[0] = '\0';
 	}
-	text[size - 1] = '\0';
 	XFree(name.value);
 	return 1;
 }
@@ -1198,6 +1202,8 @@ drawbars(void)
 void
 updatebars(void)
 {
+	if (!showbar) return;
+
 	XSetWindowAttributes wa = {
 		.override_redirect = True,
 		.background_pixel = normbg,
@@ -1753,11 +1759,7 @@ buttonpress(XEvent *e)
 		/* tags (must match drawbar layout) */
 		for (int i = 0; i < LENGTH(tags); i++) {
 			char label[8];
-			int sel = (m->tags & (1 << i)) != 0;
-			if (sel)
-				snprintf(label, sizeof(label), "[%s]", tags[i]);
-			else
-				snprintf(label, sizeof(label), " %s ", tags[i]);
+			snprintf(label, sizeof(label), " %s ", tags[i]);
 			int tw = textwidth(label) + 4;
 			x += tw;
 			if (ev->x < x) {
@@ -1817,8 +1819,14 @@ clientmessage(XEvent *e)
 
 	if (ev->message_type == netatom[NetWMState]) {
 		if (ev->data.l[1] == (long)netatom[NetWMFullscreen]
-		    || ev->data.l[2] == (long)netatom[NetWMFullscreen])
-			setfullscreen(c, ev->data.l[0] == 1);
+		    || ev->data.l[2] == (long)netatom[NetWMFullscreen]) {
+			if (ev->data.l[0] == 0)
+				setfullscreen(c, 0);
+			else if (ev->data.l[0] == 1)
+				setfullscreen(c, 1);
+			else if (ev->data.l[0] == 2)
+				setfullscreen(c, !c->isfullscreen);
+		}
 	}
 }
 
@@ -1850,10 +1858,26 @@ configurerequest(XEvent *e)
 			c->x = wc.x; c->y = wc.y;
 			c->w = wc.width; c->h = wc.height;
 			c->oldw = wc.width; c->oldh = wc.height;
+			XConfigureWindow(dpy, ev->window, ev->value_mask, &wc);
+		} else {
+			XConfigureEvent ce = {
+				.type = ConfigureNotify,
+				.display = dpy,
+				.event = c->win,
+				.window = c->win,
+				.x = c->x,
+				.y = c->y,
+				.width = c->w,
+				.height = c->h,
+				.border_width = c->bw,
+				.above = None,
+				.override_redirect = False,
+			};
+			XSendEvent(dpy, c->win, False, StructureNotifyMask, (XEvent *)&ce);
 		}
+	} else {
+		XConfigureWindow(dpy, ev->window, ev->value_mask, &wc);
 	}
-	XSetErrorHandler(xerrordummy);
-	XConfigureWindow(dpy, ev->window, ev->value_mask, &wc);
 	XSync(dpy, False);
 	XSetErrorHandler(xerror);
 }
@@ -2104,9 +2128,14 @@ createmon(int num, int x, int y, int w, int h)
 	m->mx = x; m->my = y;
 	m->mw = w; m->mh = h;
 	m->wx = x;
-	m->wy = y + (topbar ? bh : 0);
 	m->ww = w;
-	m->wh = h - (topbar ? bh : 0);
+	if (showbar) {
+		m->wy = y + (topbar ? bh : 0);
+		m->wh = h - bh;
+	} else {
+		m->wy = y;
+		m->wh = h;
+	}
 	m->next = mons;
 	mons = m;
 }
@@ -2245,7 +2274,8 @@ updatestatus(void)
 	if (pipe(pipefd) == -1)
 		goto fallback;
 
-	switch (fork()) {
+	pid_t status_pid = fork();
+	switch (status_pid) {
 	case -1:
 		close(pipefd[0]);
 		close(pipefd[1]);
@@ -2266,7 +2296,7 @@ updatestatus(void)
 		FILE *fp = fdopen(pipefd[0], "r");
 		if (fp) {
 			struct pollfd pfd = { .fd = pipefd[0], .events = POLLIN };
-			if (poll(&pfd, 1, 2000) > 0) {
+			if (poll(&pfd, 1, 100) > 0) {
 				if (fgets(status, sizeof(status), fp)) {
 					status[strcspn(status, "\n")] = '\0';
 					strncpy(status_cache, status, sizeof(status_cache) - 1);
@@ -2274,6 +2304,8 @@ updatestatus(void)
 					strncpy(status, status_cache, sizeof(status) - 1);
 				}
 			} else {
+				kill(status_pid, SIGKILL);
+				waitpid(status_pid, NULL, WNOHANG);
 				strncpy(status, status_cache, sizeof(status) - 1);
 			}
 			fclose(fp);
@@ -2358,8 +2390,10 @@ static void strip_comment(char *s)
 static char *config_path(char *buf, size_t size, const char *file)
 {
 	char *home = getenv("HOME");
-	if (!home)
-		die("bytewm: HOME not set\n");
+	if (!home) {
+		snprintf(buf, size, "/tmp/bytewm/%s", file);
+		return buf;
+	}
 	snprintf(buf, size, "%s/.config/bytewm/%s", home, file);
 	return buf;
 }
@@ -2481,6 +2515,17 @@ void
 {
 	sw = DisplayWidth(dpy, screen);
 	sh = DisplayHeight(dpy, screen);
+
+	{
+		char *home = getenv("HOME");
+		if (home) {
+			char dir[512];
+			snprintf(dir, sizeof(dir), "%s/.config/bytewm", home);
+			mkdir(dir, 0755);
+			snprintf(dir, sizeof(dir), "%s/.cache/bytewm", home);
+			mkdir(dir, 0755);
+		}
+	}
 
 	config_parse();
 
