@@ -83,6 +83,7 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_Tab,    viewprevtag,    {.v = NULL } },
 	{ MODKEY|ShiftMask,             XK_Tab,    spawn,          {.v = (char *[]){"byteswitch", NULL} } },
 	{ Mod1Mask,                     XK_Tab,    spawn,          {.v = (char *[]){"byteswitch", NULL} } },
+	{ Mod1Mask|ShiftMask,           XK_Tab,    spawn,          {.v = (char *[]){"byteswitch", NULL} } },
 	{ MODKEY,                       XK_w,      killclient,     {.v = NULL } },
 
 	{ MODKEY,                       XK_t,      setlayout,      {.v = &layouts[0] } },
