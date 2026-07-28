@@ -105,6 +105,7 @@ typedef struct Client {
 	int isfixed, isfloating, isurgent, isfullscreen;
 	int neverfocus;
 	int oldstate;
+	int autofloat;
 	float saved_ratio;
 	pid_t pid;
 	struct Node *node;
@@ -485,9 +486,9 @@ grabbuttons(Client *c, int focused)
 {
 	unsigned int mods[] = { 0, LockMask, numlockmask, numlockmask | LockMask };
 	XUngrabButton(dpy, AnyButton, AnyModifier, c->win);
-	if (!focused) return;
-	XGrabButton(dpy, AnyButton, AnyModifier, c->win, False,
-		BUTTONMASK, GrabModeSync, GrabModeSync, None, None);
+	if (!focused)
+		XGrabButton(dpy, AnyButton, AnyModifier, c->win, False,
+			BUTTONMASK, GrabModeSync, GrabModeAsync, None, None);
 	for (int i = 0; i < LENGTH(buttons); i++) {
 		if (buttons[i].func && buttons[i].button <= Button5) {
 			for (int j = 0; j < LENGTH(mods); j++)
@@ -727,7 +728,7 @@ restack(Monitor *m)
 {
 	if (!m->sel) return;
 
-	if (m->lt[m->layout]->arrange) {
+	if (m->lt[m->layout]->arrange && m->barwin) {
 		XWindowChanges wc = { .stack_mode = Below, .sibling = m->barwin };
 		for (Client *c = m->stack; c; c = c->snext)
 			if (ISVISIBLE(c, m->tags) && c != m->sel)
@@ -874,8 +875,6 @@ bsp_build(Client **list, int start, int end, int depth)
 void
 bsp(Monitor *m, int n)
 {
-	if (n == 0) return;
-
 	/* count visible non-floating clients */
 	int nclients = 0;
 	for (Client *c = m->clients; c; c = c->next)
@@ -1487,8 +1486,16 @@ setlayout(const Arg *arg)
 	} else {
 		selmon->lt[selmon->layout] = lt;
 	}
-	if (lt->arrange)
+	if (lt->arrange) {
+		for (Client *c = selmon->clients; c; c = c->next)
+			if (c->autofloat) {
+				c->isfloating = 0;
+				c->autofloat = 0;
+				c->bw = borderpx;
+				XSetWindowBorderWidth(dpy, c->win, c->bw);
+			}
 		arrange(selmon);
+	}
 	drawbars();
 }
 
@@ -1588,6 +1595,7 @@ manage(Window w, XWindowAttributes *wa)
 	/* in floating layout, auto-float new windows and center them */
 	if (!selmon->lt[selmon->layout]->arrange) {
 		c->isfloating = 1;
+		c->autofloat = 1;
 		c->bw = 1;
 		c->x = selmon->wx + (selmon->ww - c->w) / 2;
 		c->y = selmon->wy + (selmon->wh - c->h) / 3;
@@ -1740,7 +1748,10 @@ unmanage(Client *c, int destroyed)
 	Client *t;
 	for (t = m->stack; t && !ISVISIBLE(t, m->tags); t = t->snext);
 	m->sel = t;
-	if (m->sel) focus(m->sel, 1);
+	if (m->sel)
+		focus(m->sel, 1);
+	else if (m == selmon)
+		focus(NULL, 0);
 	arrange(m);
 	drawbars();
 }
@@ -2098,7 +2109,8 @@ unmapnotify(XEvent *e)
 	XUnmapEvent *ev = &e->xunmap;
 	Client *c = wintoclient(ev->window);
 	if (!c || c == scratchpad) return;
-	unmanage(c, 0);
+	if (!ev->send_event)
+		unmanage(c, 0);
 }
 
 /* ---- monitor management ---- */
