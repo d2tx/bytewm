@@ -954,11 +954,24 @@ ev_backspace:
  
 ev_clear:
     movq    $0, pwd_len(%rip)
-    movb    $0, password(%rip)
+
+    # Securely zero the entire 256-byte password buffer
+    pushq   %rcx
+    pushq   %rdi
+    leaq    password(%rip), %rdi
+    xorq    %rcx, %rcx
+clear_wipe_loop:
+    movb    $0, (%rdi, %rcx)
+    incq    %rcx
+    cmpq    $256, %rcx
+    jne     clear_wipe_loop
+    popq    %rdi
+    popq    %rcx
+
     movq    $0, auth_error(%rip)
     call    draw_lock
     jmp     event_loop
- 
+
 ev_enter:
     # check if password is empty
     cmpq    $0, pwd_len(%rip)
@@ -972,7 +985,20 @@ ev_enter:
     # auth failed: error, clear password
     movq    $1, auth_error(%rip)
     movq    $0, pwd_len(%rip)
-    movb    $0, password(%rip)
+
+    # Securely zero the entire 256-byte password buffer
+    pushq   %rcx
+    pushq   %rdi
+    leaq    password(%rip), %rdi
+    xorq    %rcx, %rcx
+fail_wipe_loop:
+    movb    $0, (%rdi, %rcx)
+    incq    %rcx
+    cmpq    $256, %rcx
+    jne     fail_wipe_loop
+    popq    %rdi
+    popq    %rcx
+
     movq    xdpy(%rip), %rdi
     movq    $50, %rsi
     call    XBell
