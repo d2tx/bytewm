@@ -2795,6 +2795,9 @@ cleanup(void)
 		while (m->clients) {
 			Client *c = m->clients;
 			m->clients = c->next;
+			XConfigureWindow(dpy, c->win, CWBorderWidth,
+				&(XWindowChanges){.border_width = c->oldbw});
+			XUngrabButton(dpy, AnyButton, AnyModifier, c->win);
 			free(c);
 		}
 		if (m->barwin) XDestroyWindow(dpy, m->barwin);
@@ -2813,6 +2816,20 @@ cleanup(void)
 		DefaultColormap(dpy, screen), &xft_tagfg);
 	XftColorFree(dpy, DefaultVisual(dpy, screen),
 		DefaultColormap(dpy, screen), &xft_urgfg);
+	XftColorFree(dpy, DefaultVisual(dpy, screen),
+		DefaultColormap(dpy, screen), &xft_cpu);
+	XftColorFree(dpy, DefaultVisual(dpy, screen),
+		DefaultColormap(dpy, screen), &xft_mem);
+	XftColorFree(dpy, DefaultVisual(dpy, screen),
+		DefaultColormap(dpy, screen), &xft_temp);
+	XftColorFree(dpy, DefaultVisual(dpy, screen),
+		DefaultColormap(dpy, screen), &xft_gpu);
+	XftColorFree(dpy, DefaultVisual(dpy, screen),
+		DefaultColormap(dpy, screen), &xft_date);
+	XftColorFree(dpy, DefaultVisual(dpy, screen),
+		DefaultColormap(dpy, screen), &xft_seltag);
+	XftColorFree(dpy, DefaultVisual(dpy, screen),
+		DefaultColormap(dpy, screen), &xft_vol);
 	XFreeGC(dpy, bargc);
 	XUngrabKey(dpy, AnyKey, AnyModifier, root);
 	XFreeCursor(dpy, cursor[CurNormal]);
