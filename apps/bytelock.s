@@ -1,26 +1,26 @@
 # bytelock - standalone x86_64 screen locker for bytewm
 # gruvbox themed, PAM auth, X11 drawing
 # build: as -o bytelock.o bytelock.s && cc -o bytelock bytelock.o -lX11 -lpam
-
+ 
 .section .rodata
 pam_service:     .asciz  "su"
 font_name:       .asciz  "fixed"
 str_user:        .asciz  "USER"
 str_root:        .asciz  "root"
-
+ 
 color_bg:        .asciz  "#282828"
 color_fg:        .asciz  "#ebdbb2"
 color_aqua:      .asciz  "#689d6a"
 color_red:       .asciz  "#cc241d"
 color_orange:    .asciz  "#d65d0e"
 color_dimbg:     .asciz  "#3c3836"
-
+ 
 str_locked:      .asciz  "-- LOCKED --"
 str_incorrect:   .asciz  "incorrect"
 str_dots:        .ascii  "* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * "
                 .byte 0
 .equ DOT_STRIDE, 2
-
+ 
 # debug
 logpath:         .asciz  "/tmp/bytelock.log"
 log_conv_called: .asciz  "[conv] called\n"
@@ -31,16 +31,16 @@ log_end:         .asciz  "]\n"
 log_style:       .asciz  "[conv] msg_style="
 log_sp:          .asciz  " "
 log_nl:          .asciz  "\n"
-
+ 
 .section .data
 # env pointer (set at startup)
 environ_ptr:     .quad   0
-
+ 
 # PAM
 pam_handle:      .quad   0
 conv_func:       .quad   pam_converse
 conv_appdata:    .quad   0
-
+ 
 # X11 handles
 xdpy:            .quad   0
 xscr:            .quad   0
@@ -53,7 +53,7 @@ xsw:             .quad   0
 xsh:             .quad   0
 xdepth:          .quad   0
 xvisual:         .quad   0
-
+ 
 # colors (allocated pixels)
 p_bg:            .quad   0
 p_fg:            .quad   0
@@ -61,18 +61,18 @@ p_aqua:          .quad   0
 p_red:           .quad   0
 p_orange:        .quad   0
 p_dimbg:         .quad   0
-
+ 
 # state
 pwd_len:         .quad   0
 auth_error:      .quad   0
-
+ 
 .equ PAM_SUCCESS,       0
 .equ PAM_PROMPT_ECHO_OFF, 1
 .equ PAM_PROMPT_ECHO_ON,  2
 .equ PAM_ERROR_MSG,     3
 .equ PAM_TEXT_INFO,      4
 .equ PAM_AUTH_ERR,       7
-
+ 
 .equ GrabModeAsync,     1
 .equ CWOverrideRedirect, 512
 .equ ExposureMask,      32768
@@ -82,14 +82,14 @@ auth_error:      .quad   0
 .equ CurrentTime,       0
 .equ KeyPress,          2
 .equ Expose,            12
-
+ 
 .section .bss
 password:        .fill   256, 1, 0
 username:        .fill   64,  1, 0
 resp_buf:        .fill   64,  1, 0
 keybuf:          .fill   32,  1, 0
 xev:             .fill   192, 1, 0
-
+ 
 .section .text
 .globl main
 .extern XOpenDisplay, XDefaultScreen, XRootWindow, XDefaultColormap
@@ -103,11 +103,11 @@ xev:             .fill   192, 1, 0
 .extern pam_start, pam_authenticate, pam_end
 .extern pam_acct_mgmt
 .extern calloc, strdup, free, usleep
-
+ 
 # ═══════════════════════════════════════════════════════
 #  HELPERS
 # ═══════════════════════════════════════════════════════
-
+ 
 _strlen:
     xorq    %rcx, %rcx
     decq    %rcx
@@ -116,7 +116,7 @@ _strlen:
     jne     1b
     movq    %rcx, %rax
     ret
-
+ 
 # getenv_r(%rdi = name) → %rax = value (NULL if not found)
 getenv_r:
     pushq   %r12
@@ -165,12 +165,12 @@ ge_done:
     popq    %r13
     popq    %r12
     ret
-
+ 
 # ═══════════════════════════════════════════════════════
 #  PAM CONVERSATION CALLBACK
 #  rdi=num_msg  rsi=msg  rdx=resp  rcx=appdata
 # ═══════════════════════════════════════════════════════
-
+ 
 pam_converse:
     pushq   %rbp
     movq    %rsp, %rbp
@@ -179,38 +179,38 @@ pam_converse:
     pushq   %r14
     pushq   %r15
     pushq   %rbx
-
+ 
     movq    %rdi, %r12             # num_msg
     movq    %rsi, %r13             # msg
     movq    %rdx, %r14             # resp out
-
+ 
     # calloc(num_msg, 16) — 16 bytes per pam_response
     movq    %r12, %rdi
     movq    $16, %rsi
     call    calloc
     movq    %rax, %rbx             # response array
-
+ 
     xorq    %r15, %r15             # i = 0
-
+ 
 pc_loop:
     cmpq    %r12, %r15
     jae     pc_end
-
+ 
     movq    (%r13, %r15, 8), %rdi  # msg[i]
     movl    (%rdi), %eax            # msg_style
-
+ 
     cmpl    $PAM_PROMPT_ECHO_OFF, %eax
     je      pc_password
     cmpl    $PAM_PROMPT_ECHO_ON, %eax
     je      pc_username
-
+ 
     # info/error: empty response — compute address fresh
     movq    %r15, %rax
     shlq    $4, %rax
     movq    $0, (%rbx, %rax)
     movl    $0, 8(%rbx, %rax)
     jmp     pc_next
-
+ 
 pc_password:
     leaq    password(%rip), %rdi
     call    strdup                  # clobbers rdx/rcx
@@ -219,7 +219,7 @@ pc_password:
     movq    %rax, (%rbx, %rdx)     # resp[i].resp
     movl    $0, 8(%rbx, %rdx)       # resp[i].resp_retcode
     jmp     pc_next
-
+ 
 pc_username:
     leaq    username(%rip), %rdi
     call    strdup
@@ -228,15 +228,15 @@ pc_username:
     movq    %rax, (%rbx, %rdx)
     movl    $0, 8(%rbx, %rdx)
     jmp     pc_next
-
+ 
 pc_next:
     incq    %r15
     jmp     pc_loop
-
+ 
 pc_end:
     movq    %rbx, (%r14)           # *resp = response array
     xorq    %rax, %rax             # PAM_SUCCESS
-
+ 
     popq    %rbx
     popq    %r15
     popq    %r14
@@ -244,16 +244,16 @@ pc_end:
     popq    %r12
     popq    %rbp
     ret
-
+ 
 # ═══════════════════════════════════════════════════════
 #  AUTHENTICATE  → rax = 1 (ok) / 0 (fail)
 # ═══════════════════════════════════════════════════════
-
+ 
 try_auth:
     pushq   %r12
     pushq   %r13
     subq    $8, %rsp               # align stack for pam_start call
-
+ 
     leaq    pam_service(%rip), %rdi
     leaq    username(%rip), %rsi
     cmpb    $0, (%rsi)
@@ -265,31 +265,31 @@ try_auth:
     call    pam_start
     testl   %eax, %eax
     jnz     ta_fail
-
+ 
     movq    pam_handle(%rip), %rdi
     xorq    %rsi, %rsi
     call    pam_authenticate
     movl    %eax, %r12d
-
+ 
     testl   %eax, %eax
     jnz     ta_end
-
+ 
     # check account validity (expired/locked/disabled)
     movq    pam_handle(%rip), %rdi
     xorq    %rsi, %rsi
     call    pam_acct_mgmt
     movl    %eax, %r12d
-
+ 
 ta_end:
     movq    pam_handle(%rip), %rdi
     movl    %r12d, %esi
     call    pam_end
-
+ 
     movq    $0, pam_handle(%rip)
-
+ 
     testl   %r12d, %r12d
     jnz     ta_fail
-
+ 
     movq    $1, %rax
     jmp     ta_done
 ta_fail:
@@ -299,11 +299,11 @@ ta_done:
     popq    %r13
     popq    %r12
     ret
-
+ 
 # ═══════════════════════════════════════════════════════
 #  DRAW LOCK SCREEN
 # ═══════════════════════════════════════════════════════
-
+ 
 draw_lock:
     pushq   %rbp
     movq    %rsp, %rbp
@@ -313,7 +313,7 @@ draw_lock:
     pushq   %r15
     pushq   %rbx
     subq    $8, %rsp               # align stack (6 pushes = 8 mod 16)
-
+ 
     # fill background
     movq    xdpy(%rip), %rdi
     movq    xgc(%rip), %rsi
@@ -329,14 +329,14 @@ draw_lock:
     movq    xsw(%rip), %r9
     call    XFillRectangle
     addq    $16, %rsp
-
+ 
     # font height
     movq    xfont(%rip), %rax
     movl    88(%rax), %r14d        # r14d = ascent
     movl    92(%rax), %r15d        # r15d = descent
     addl    %r15d, %r14d           # r14d = ascent + descent
     movslq  %r14d, %r14            # r14 = bh
-
+ 
     # ── measure title ──
     leaq    str_locked(%rip), %rdi
     call    _strlen
@@ -346,7 +346,7 @@ draw_lock:
     movq    %r15, %rdx
     call    XTextWidth
     movq    %rax, %r12             # r12 = title_w
-
+ 
     # ── measure dots ──
     movq    pwd_len(%rip), %r13
     testq   %r13, %r13
@@ -361,7 +361,7 @@ dl_nodots_meas:
     xorq    %rax, %rax
 dl_dots_meas_done:
     movq    %rax, %r13             # r13 = dots_w (0 if no dots)
-
+ 
     # ── measure error ──
     cmpq    $0, auth_error(%rip)
     je      dl_noerr_meas
@@ -376,7 +376,7 @@ dl_noerr_meas:
     xorq    %rax, %rax
 dl_err_meas_done:
     movq    %rax, %r15             # r15 = error_w (0 if no error)
-
+ 
     # ── card dimensions ──
     # card_w = max(title_w, dots_w, error_w) + 80
     movq    %r12, %rax             # title_w
@@ -386,7 +386,7 @@ dl_err_meas_done:
     cmova   %r15, %rax
     addq    $80, %rax
     movq    %rax, %rbx             # rbx = card_w
-
+ 
     # card content height
     movq    %r14, %rax             # title line (bh)
     addq    $12, %rax              # gap
@@ -395,24 +395,25 @@ dl_err_meas_done:
     addq    %r14, %rax             # error line (bh)
     addq    $24, %rax              # top+bottom padding inside card
     movq    %rax, %r15             # r15 = card_h
-
+ 
     # card position
     movq    xsw(%rip), %rax
     subq    %rbx, %rax
     shrq    $1, %rax               # card_x
     movq    %rax, %r12             # save card_x
-
+ 
     movq    xsh(%rip), %rax
     subq    %r15, %rax
     shrq    $1, %rax
     movq    %rax, %r13             # r13 = card_y
-
+ 
     # ── draw card border (dimbg) ──
     movq    xdpy(%rip), %rdi
     movq    xgc(%rip), %rsi
     movq    p_dimbg(%rip), %rdx
     call    XSetForeground
-
+ 
+    pushq   $0                     # dummy push for 16-byte alignment
     pushq   %r15                   # h
     movq    xdpy(%rip), %rdi
     movq    xwin(%rip), %rsi
@@ -421,43 +422,43 @@ dl_err_meas_done:
     movq    %r13, %r8
     movq    %rbx, %r9              # w
     call    XDrawRectangle
-    addq    $8, %rsp
-
+    addq    $16, %rsp              # clean up 2 pushes
+ 
     # ── draw title (orange, centered in card) ──
     leaq    str_locked(%rip), %rdi
     call    _strlen
     movq    %rax, %r15
-
+ 
     movq    xfont(%rip), %rdi
     leaq    str_locked(%rip), %rsi
     movq    %r15, %rdx
     call    XTextWidth
-
+ 
     movq    xsw(%rip), %rcx
     subq    %rax, %rcx
     shrq    $1, %rcx               # title_x
-
+ 
     movq    xfont(%rip), %rax
     movslq  88(%rax), %rax
     addq    %r13, %rax
     addq    $12, %rax
     movq    %rax, %r8              # title_y
-
+ 
     subq    $8, %rsp
     pushq   %rcx
     pushq   %r8
     pushq   %r15
-
+ 
     movq    xdpy(%rip), %rdi
     movq    xgc(%rip), %rsi
     movq    p_orange(%rip), %rdx
     call    XSetForeground
-
+ 
     popq    %r9
     popq    %r8
     popq    %rcx
     addq    $8, %rsp
-
+ 
     pushq   $0
     pushq   %r9
     movq    xdpy(%rip), %rdi
@@ -466,44 +467,44 @@ dl_err_meas_done:
     leaq    str_locked(%rip), %r9
     call    XDrawString
     addq    $16, %rsp
-
+ 
     # ── draw dots (fg, centered in card) ──
     movq    pwd_len(%rip), %r15
     testq   %r15, %r15
     jz      dl_skip_dots
-
+ 
     imulq   $DOT_STRIDE, %r15
     movq    xfont(%rip), %rdi
     leaq    str_dots(%rip), %rsi
     movq    %r15, %rdx
     call    XTextWidth
-
+ 
     movq    xsw(%rip), %rcx
     subq    %rax, %rcx
     shrq    $1, %rcx               # dots_x
-
+ 
     movq    xfont(%rip), %rax
     movslq  88(%rax), %rax
     addq    %r13, %rax
     addq    %r14, %rax
     addq    $24, %rax
     movq    %rax, %r8              # dots_y
-
+ 
     subq    $8, %rsp
     pushq   %rcx
     pushq   %r8
     pushq   %r15
-
+ 
     movq    xdpy(%rip), %rdi
     movq    xgc(%rip), %rsi
     movq    p_fg(%rip), %rdx
     call    XSetForeground
-
+ 
     popq    %r9
     popq    %r8
     popq    %rcx
     addq    $8, %rsp
-
+ 
     pushq   $0
     pushq   %r9
     movq    xdpy(%rip), %rdi
@@ -512,13 +513,13 @@ dl_err_meas_done:
     leaq    str_dots(%rip), %r9
     call    XDrawString
     addq    $16, %rsp
-
+ 
 dl_skip_dots:
-
+ 
     # ── draw error (red, centered in card) ──
     cmpq    $0, auth_error(%rip)
     je      dl_flush
-
+ 
     leaq    str_incorrect(%rip), %rdi
     call    _strlen
     movq    %rax, %r15
@@ -526,11 +527,11 @@ dl_skip_dots:
     leaq    str_incorrect(%rip), %rsi
     movq    %r15, %rdx
     call    XTextWidth
-
+ 
     movq    xsw(%rip), %rcx
     subq    %rax, %rcx
     shrq    $1, %rcx               # error_x
-
+ 
     movq    xfont(%rip), %rax
     movslq  88(%rax), %rax
     addq    %r13, %rax
@@ -538,22 +539,22 @@ dl_skip_dots:
     addq    %r14, %rax
     addq    $36, %rax
     movq    %rax, %r8              # error_y
-
+ 
     subq    $8, %rsp
     pushq   %rcx
     pushq   %r8
     pushq   %r15
-
+ 
     movq    xdpy(%rip), %rdi
     movq    xgc(%rip), %rsi
     movq    p_red(%rip), %rdx
     call    XSetForeground
-
+ 
     popq    %r9
     popq    %r8
     popq    %rcx
     addq    $8, %rsp
-
+ 
     pushq   $0
     pushq   %r9
     movq    xdpy(%rip), %rdi
@@ -562,7 +563,7 @@ dl_skip_dots:
     leaq    str_incorrect(%rip), %r9
     call    XDrawString
     addq    $16, %rsp
-
+ 
 dl_flush:
     movq    xdpy(%rip), %rdi
     call    XFlush
@@ -574,11 +575,11 @@ dl_flush:
     popq    %r12
     popq    %rbp
     ret
-
+ 
 # ═══════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════
-
+ 
 main:
     pushq   %rbp
     movq    %rsp, %rbp
@@ -586,9 +587,9 @@ main:
     pushq   %r13
     pushq   %r14
     subq    $8, %rsp               # align stack to 16 bytes for C calls
-
+ 
     movq    %rdx, environ_ptr(%rip) # save envp
-
+ 
     # disable core dumps to prevent password leakage
     movq    $157, %rax              # sys_prctl
     movq    $2, %rdi                # PR_SET_DUMPABLE
@@ -597,14 +598,14 @@ main:
     xorq    %r10, %r10
     xorq    %r8, %r8
     syscall
-
+ 
     # mlock password buffer to prevent swap leakage
     movq    $149, %rax              # sys_mlock
     leaq    password(%rip), %rdi
     andq    $-4096, %rdi            # page-align down
     movq    $4096, %rsi             # one page is enough
     syscall
-
+ 
     # ── get username ──
     leaq    str_user(%rip), %rdi
     call    getenv_r
@@ -625,40 +626,40 @@ main:
     jae     1f
     jmp     2b
 1:
-
+ 
     # ── open display ──
     xorq    %rdi, %rdi
     call    XOpenDisplay
     movq    %rax, xdpy(%rip)
     testq   %rax, %rax
     jz      exit_fail
-
+ 
     # screen / root
     movq    %rax, %rdi
     call    XDefaultScreen
     movl    %eax, xscr(%rip)
     movslq  %eax, %rsi
-
+ 
     movq    xdpy(%rip), %rdi
     movslq  xscr(%rip), %rsi
     call    XRootWindow
     movq    %rax, xroot(%rip)
-
+ 
     movq    xdpy(%rip), %rdi
     movslq  xscr(%rip), %rsi
     call    XDefaultColormap
     movq    %rax, xcmap(%rip)
-
+ 
     movq    xdpy(%rip), %rdi
     movslq  xscr(%rip), %rsi
     call    XDefaultDepth
     movl    %eax, xdepth(%rip)
-
+ 
     movq    xdpy(%rip), %rdi
     movslq  xscr(%rip), %rsi
     call    XDefaultVisual
     movq    %rax, xvisual(%rip)
-
+ 
     # screen dimensions
     movq    xdpy(%rip), %rdi
     movslq  xscr(%rip), %rsi
@@ -674,7 +675,7 @@ main:
     movslq  xscr(%rip), %rsi
     call    XDisplayHeight
     movq    %rax, xsh(%rip)
-
+ 
     # ── allocate colors ──
     # bg
     leaq    color_bg(%rip), %rsi
@@ -751,7 +752,7 @@ main:
     call    XAllocColor
     movq    xev(%rip), %rax
     movq    %rax, p_dimbg(%rip)
-
+ 
     # ── load font ──
     movq    xdpy(%rip), %rdi
     leaq    font_name(%rip), %rsi
@@ -759,7 +760,7 @@ main:
     movq    %rax, xfont(%rip)
     testq   %rax, %rax
     jz      exit_fail
-
+ 
     # ── create fullscreen window ──
     # XCreateWindow(dpy, parent, x, y, w, h, border, depth, class, visual, mask, attrs)
     # 12 args → 6 on stack (pushed in reverse: attrs, mask, visual, class, depth, border)
@@ -798,7 +799,7 @@ main:
     addq    $48, %rsp              # clean 6 pushes
     addq    $112, %rsp             # clean attrs struct
     movq    %rax, xwin(%rip)
-
+ 
     # ── create GC ──
     movq    xdpy(%rip), %rdi
     movq    xwin(%rip), %rsi
@@ -806,14 +807,14 @@ main:
     xorq    %rcx, %rcx             # values = NULL
     call    XCreateGC
     movq    %rax, xgc(%rip)
-
+ 
     # set font on GC (XSetFont expects Font ID, not XFontStruct*)
     movq    xfont(%rip), %rax
     movq    8(%rax), %rdx          # font->fid
     movq    xdpy(%rip), %rdi
     movq    xgc(%rip), %rsi
     call    XSetFont
-
+ 
     # ── show window ──
     movq    xdpy(%rip), %rdi
     movq    xwin(%rip), %rsi
@@ -821,13 +822,13 @@ main:
     movq    xdpy(%rip), %rdi
     movq    xwin(%rip), %rsi
     call    XRaiseWindow
-
+ 
     # set event mask
     movq    xdpy(%rip), %rdi
     movq    xwin(%rip), %rsi
     movq    $(ExposureMask | KeyPressMask), %rdx
     call    XSelectInput
-
+ 
     # ── grab keyboard (retry up to 5x with 50ms delay) ──
     xorq    %r12, %r12             # r12 = retry counter
 grab_retry:
@@ -836,7 +837,7 @@ grab_retry:
     movq    $1, %rax               # exit code for grab failure
     jmp     cleanup
 1:
-
+ 
     movq    xdpy(%rip), %rdi
     movq    xroot(%rip), %rsi
     movq    $1, %rdx
@@ -846,13 +847,13 @@ grab_retry:
     call    XGrabKeyboard
     testl   %eax, %eax
     jz      grab_kb_ok
-
+ 
     incq    %r12
     movq    $50000, %rdi            # 50ms
     call    usleep
     jmp     grab_retry
 grab_kb_ok:
-
+ 
     # XGrabPointer (9 args → 3 on stack, pad for alignment)
     subq    $8, %rsp               # alignment pad (need even pushes before call)
     pushq   $CurrentTime
@@ -868,29 +869,29 @@ grab_kb_ok:
     addq    $32, %rsp              # clean 4 slots
     testl   %eax, %eax
     jnz     cleanup
-
+ 
     # draw initial screen
     call    draw_lock
-
+ 
     # ── event loop ──
 event_loop:
     movq    xdpy(%rip), %rdi
     leaq    xev(%rip), %rsi
     call    XNextEvent
-
+ 
     movl    xev(%rip), %eax        # event type
     cmpl    $Expose, %eax
     je      ev_expose
     cmpl    $KeyPress, %eax
     je      ev_key
     jmp     event_loop
-
+ 
 ev_expose:
     cmpl    $0, xev+56(%rip)       # xexpose.count
     jne     event_loop
     call    draw_lock
     jmp     event_loop
-
+ 
 ev_key:
     # XLookupString(event, buf, bufsize, &keysym, NULL)
     leaq    xev(%rip), %rdi
@@ -900,31 +901,31 @@ ev_key:
     xorq    %r8, %r8               # compose = NULL
     .extern XLookupString
     call    XLookupString
-
+ 
     movq    xev+32(%rip), %r12     # keysym
-
+ 
     # ── Enter: authenticate ──
     cmpq    $0xFF0D, %r12          # XK_Return
     je      ev_enter
-
+ 
     # ── Escape: clear password ──
     cmpq    $0xFF1B, %r12          # XK_Escape
     je      ev_clear
-
+ 
     # ── BackSpace: delete last char ──
     cmpq    $0xFF08, %r12          # XK_BackSpace
     je      ev_backspace
-
+ 
     # ── Ctrl+U: clear ──
     cmpq    $0x15, %r12            # Ctrl+U
     je      ev_clear
-
+ 
     # ── printable ──
     cmpq    $0x20, %r12
     jb      event_loop
     cmpq    $0x7E, %r12
     ja      event_loop
-
+ 
     # append char
     movq    pwd_len(%rip), %rcx
     cmpq    $32, %rcx               # cap to match dots string
@@ -938,7 +939,7 @@ ev_key:
     movq    $0, auth_error(%rip)
     call    draw_lock
     jmp     event_loop
-
+ 
 ev_backspace:
     movq    pwd_len(%rip), %rcx
     testq   %rcx, %rcx
@@ -950,24 +951,24 @@ ev_backspace:
     movq    $0, auth_error(%rip)
     call    draw_lock
     jmp     event_loop
-
+ 
 ev_clear:
     movq    $0, pwd_len(%rip)
     movb    $0, password(%rip)
     movq    $0, auth_error(%rip)
     call    draw_lock
     jmp     event_loop
-
+ 
 ev_enter:
     # check if password is empty
     cmpq    $0, pwd_len(%rip)
     je      event_loop
-
+ 
     # try authentication
     call    try_auth
     cmpq    $1, %rax
     je      cleanup
-
+ 
     # auth failed: error, clear password
     movq    $1, auth_error(%rip)
     movq    $0, pwd_len(%rip)
@@ -977,7 +978,7 @@ ev_enter:
     call    XBell
     call    draw_lock
     jmp     event_loop
-
+ 
 # ── cleanup & exit ──
 cleanup:
     movq    xdpy(%rip), %rdi
@@ -986,7 +987,7 @@ cleanup:
     movq    xdpy(%rip), %rdi
     movq    $CurrentTime, %rsi
     call    XUngrabPointer
-
+ 
     movq    xdpy(%rip), %rdi
     movq    xgc(%rip), %rsi
     call    XFreeGC
@@ -998,7 +999,7 @@ cleanup:
     call    XDestroyWindow
     movq    xdpy(%rip), %rdi
     call    XCloseDisplay
-
+ 
     # zero password buffer (all 256 bytes)
     leaq    password(%rip), %rdi
     xorq    %rcx, %rcx
@@ -1006,10 +1007,10 @@ cleanup:
     incq    %rcx
     cmpq    $256, %rcx
     jne     1b
-
+ 
     xorq    %rax, %rax              # exit 0 = success
     jmp     exit_ret
-
+ 
 exit_fail:
     movq    $1, %rax
 exit_ret:
