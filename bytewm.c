@@ -809,7 +809,7 @@ tile(Monitor *m, int n)
 				int idx = i - master_n;
 				resize(c, sx + (master_n > 0 ? goi : 0),
 					my + idx * (sh_each + gapx),
-					sw - (master_n > 0 ? goi * 2 : 0) - 2 * borderpx,
+					sw - (master_n > 0 ? goi : 0) - 2 * borderpx,
 					sh_each - 2 * borderpx, 0);
 			}
 			i++;
