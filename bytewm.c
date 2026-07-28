@@ -2172,6 +2172,39 @@ createmon(int num, int x, int y, int w, int h)
 void
 updategeom(void)
 {
+	/* save per-monitor state */
+	unsigned int saved_tags = 0, saved_oldtags = 0;
+	int saved_taglayout[8] = {0};
+	struct Layout *saved_taglt[8][2] = {{NULL}};
+	float saved_mfact = mfact;
+	int saved_nmaster = nmaster;
+	int saved_layout = 0;
+	struct Layout *saved_lt[2] = { NULL, NULL };
+	int saved_gappx = gappx, saved_gappoh = gappoh, saved_gappoi = gappoi;
+	int saved_topbar = topbar;
+	int had_monitor = 0;
+
+	if (mons) {
+		Monitor *m = mons;
+		had_monitor = 1;
+		saved_tags = m->tags;
+		saved_oldtags = m->oldtags;
+		saved_mfact = m->mfact;
+		saved_nmaster = m->nmaster;
+		saved_layout = m->layout;
+		saved_lt[0] = m->lt[0];
+		saved_lt[1] = m->lt[1];
+		saved_gappx = m->gappx;
+		saved_gappoh = m->gappoh;
+		saved_gappoi = m->gappoi;
+		saved_topbar = m->topbar;
+		for (int i = 0; i < LENGTH(tags); i++) {
+			saved_taglayout[i] = m->taglayout[i];
+			saved_taglt[i][0] = m->taglt[i][0];
+			saved_taglt[i][1] = m->taglt[i][1];
+		}
+	}
+
 	/* save existing clients */
 	Client *allclients = NULL;
 	Client **tail = &allclients;
@@ -2196,6 +2229,26 @@ updategeom(void)
 
 	if (!selmon) selmon = mons;
 	selmon = mons;  /* unconditionally update after freeing old monitors */
+
+	/* restore per-monitor state */
+	if (had_monitor && selmon) {
+		selmon->tags = saved_tags;
+		selmon->oldtags = saved_oldtags;
+		selmon->mfact = saved_mfact;
+		selmon->nmaster = saved_nmaster;
+		selmon->layout = saved_layout;
+		selmon->lt[0] = saved_lt[0];
+		selmon->lt[1] = saved_lt[1];
+		selmon->gappx = saved_gappx;
+		selmon->gappoh = saved_gappoh;
+		selmon->gappoi = saved_gappoi;
+		selmon->topbar = saved_topbar;
+		for (int i = 0; i < LENGTH(tags); i++) {
+			selmon->taglayout[i] = saved_taglayout[i];
+			selmon->taglt[i][0] = saved_taglt[i][0];
+			selmon->taglt[i][1] = saved_taglt[i][1];
+		}
+	}
 
 	/* reassign clients */
 	for (Client *c = allclients; c; ) {
@@ -2249,6 +2302,8 @@ autostart(void)
 	if (!home) return;
 
 	char dir[512];
+	snprintf(dir, sizeof(dir), "%s/.config", home);
+	mkdir(dir, 0755);
 	snprintf(dir, sizeof(dir), "%s/.config/bytewm", home);
 	mkdir(dir, 0755);
 
@@ -2545,7 +2600,11 @@ void
 		char *home = getenv("HOME");
 		if (home) {
 			char dir[512];
+			snprintf(dir, sizeof(dir), "%s/.config", home);
+			mkdir(dir, 0755);
 			snprintf(dir, sizeof(dir), "%s/.config/bytewm", home);
+			mkdir(dir, 0755);
+			snprintf(dir, sizeof(dir), "%s/.cache", home);
 			mkdir(dir, 0755);
 			snprintf(dir, sizeof(dir), "%s/.cache/bytewm", home);
 			mkdir(dir, 0755);
