@@ -105,6 +105,7 @@ typedef struct Client {
 	int isfixed, isfloating, isurgent, isfullscreen;
 	int neverfocus;
 	int oldstate;
+	float saved_ratio;
 	pid_t pid;
 	struct Node *node;
 	struct Monitor *mon;
@@ -456,7 +457,7 @@ updatenumlockmask(void)
 		for (int j = 0; j < modmap->max_keypermod; j++)
 			if (modmap->modifiermap[i * modmap->max_keypermod + j]
 			    == XKeysymToKeycode(dpy, XK_Num_Lock))
-				numlockmask = (1 << i);
+				numlockmask |= (1 << i);
 	XFreeModifiermap(modmap);
 }
 
@@ -464,13 +465,13 @@ void
 grabkeys(void)
 {
 	KeyCode code;
+	unsigned int mods[] = { 0, LockMask, numlockmask, numlockmask | LockMask };
 	XUngrabKey(dpy, AnyKey, AnyModifier, root);
 	for (int i = 0; i < LENGTH(keys); i++) {
 		if ((code = XKeysymToKeycode(dpy, keys[i].keysym))) {
-			XGrabKey(dpy, code, keys[i].mod, root, True,
-				GrabModeAsync, GrabModeAsync);
-			XGrabKey(dpy, code, keys[i].mod | numlockmask, root, True,
-				GrabModeAsync, GrabModeAsync);
+			for (int j = 0; j < LENGTH(mods); j++)
+				XGrabKey(dpy, code, keys[i].mod | mods[j], root, True,
+					GrabModeAsync, GrabModeAsync);
 		}
 	}
 }
@@ -478,14 +479,18 @@ grabkeys(void)
 void
 grabbuttons(Client *c, int focused)
 {
+	unsigned int mods[] = { 0, LockMask, numlockmask, numlockmask | LockMask };
 	XUngrabButton(dpy, AnyButton, AnyModifier, c->win);
 	if (!focused) return;
 	XGrabButton(dpy, AnyButton, AnyModifier, c->win, False,
 		BUTTONMASK, GrabModeSync, GrabModeSync, None, None);
-	for (int i = 0; i < LENGTH(buttons); i++)
-		if (buttons[i].func && buttons[i].button <= Button5)
-			XGrabButton(dpy, buttons[i].button, buttons[i].mod, c->win, False,
-				BUTTONMASK, GrabModeAsync, GrabModeSync, None, None);
+	for (int i = 0; i < LENGTH(buttons); i++) {
+		if (buttons[i].func && buttons[i].button <= Button5) {
+			for (int j = 0; j < LENGTH(mods); j++)
+				XGrabButton(dpy, buttons[i].button, buttons[i].mod | mods[j], c->win, False,
+					BUTTONMASK, GrabModeAsync, GrabModeSync, None, None);
+		}
+	}
 }
 
 void
@@ -891,6 +896,12 @@ bsp(Monitor *m, int n)
 				list[i++] = c;
 	}
 
+	/* save per-client ratios from old tree */
+	for (Client *c = m->clients; c; c = c->next)
+		if (ISVISIBLE(c, m->tags) && !c->isfloating && !c->isfullscreen
+		    && c->node && c->node->parent)
+			c->saved_ratio = c->node->parent->ratio;
+
 	/* destroy old tree */
 	if (m->root) {
 		for (Client *c = m->clients; c; c = c->next)
@@ -901,6 +912,12 @@ bsp(Monitor *m, int n)
 
 	/* rebuild balanced tree with alternating splits */
 	m->root = bsp_build(list, 0, nclients - 1, 0);
+
+	/* restore saved ratios */
+	for (Client *c = m->clients; c; c = c->next)
+		if (ISVISIBLE(c, m->tags) && !c->isfloating && !c->isfullscreen
+		    && c->node && c->node->parent && c->saved_ratio != 0.0)
+			c->node->parent->ratio = c->saved_ratio;
 
 	bsp_arrange(m->root, m->wx, m->wy, m->ww, m->wh,
 	            m->gappx, m->gappoh, m->gappoi);
@@ -1464,14 +1481,8 @@ setlayout(const Arg *arg)
 	} else {
 		selmon->lt[selmon->layout] = lt;
 	}
-	if (lt->arrange) {
-		for (Client *c = selmon->clients; c; c = c->next) {
-			c->isfloating = 0;
-			c->bw = borderpx;
-			XSetWindowBorderWidth(dpy, c->win, c->bw);
-		}
-		selmon->lt[selmon->layout]->arrange(selmon, countclients(selmon));
-	}
+	if (lt->arrange)
+		arrange(selmon);
 	drawbars();
 }
 
@@ -1499,6 +1510,7 @@ setcfact(const Arg *arg)
 	float f = arg->f + n->ratio;
 	if (f < 0.1 || f > 0.9) return;
 	n->ratio = f;
+	if (selmon->sel) selmon->sel->saved_ratio = f;
 	/* arrange in-place to preserve modified ratios */
 	XSetErrorHandler(xerrordummy);
 	if (selmon->lt[selmon->layout]->arrange)
@@ -1603,8 +1615,6 @@ manage(Window w, XWindowAttributes *wa)
 	XSelectInput(dpy, w,
 		EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask);
 	grabbuttons(c, 0);
-
-	/* tree-based layouts build on arrange; no incremental building here */
 
 	/* check for scratchpad (st -c scratchpad sets res_name) */
 	XClassHint ch;
@@ -2340,8 +2350,9 @@ static char *trim(char *s)
 
 static void strip_comment(char *s)
 {
-	char *p = strchr(s, '#');
-	if (p) *p = '\0';
+	char *t = s;
+	while (*t == ' ' || *t == '\t') t++;
+	if (*t == '#') *s = '\0';
 }
 
 static char *config_path(char *buf, size_t size, const char *file)
