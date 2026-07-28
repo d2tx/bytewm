@@ -24,7 +24,7 @@ clr_gray:      .ascii  "\033[38;5;246m"
 clr_light:     .ascii  "\033[38;5;223m"
 clr_red:       .ascii  "\033[38;5;124m"
 clr_yellow:    .ascii  "\033[38;5;178m"
-clr_end:                                     # sentinel
+
 
 # ── string constants ───────────────────────────────────
 str_title:     .asciz  "\342\224\200\342\224\200 bytefetch \342\224\200\342\224\200"
@@ -240,7 +240,6 @@ read_file:
     ret
 rf_err_pop:
     popq    %rcx                    # clean maxsize off stack
-rf_err_nopop:
     movq    $-1, %rax
     popq    %rbx
     popq    %r12
@@ -266,7 +265,6 @@ find_after:
 
     xorq    %rcx, %rcx             # hay index
 fa_loop:
-    movq    %r14, %rax
     # r14 may be negative, skip check if so
     testq   %r14, %r14
     js      1f
@@ -275,8 +273,6 @@ fa_loop:
 1:
     movq    %r13, %rsi
     addq    %rcx, %rsi             # hay + idx
-    movq    %rdi, %r8              # remember start for later
-
     # compare needle_len chars
     xorq    %rax, %rax             # inner counter
 fa_cmp:
@@ -506,9 +502,8 @@ fu_m_copy:
     incq    %rdi
     jmp     fu_m_copy
 fu_m_done:
-    movw    $0x206d, (%rdi)        # "m"
-    incq    %rdi
-    movb    $0, (%rdi)
+    movw    $0x006d, (%rdi)        # "m\0"
+    addq    $2, %rdi
 
     popq    %rbx
     popq    %r13
@@ -699,6 +694,7 @@ detect_wm:
     pushq   %r13
     pushq   %r14
     pushq   %rbx
+    pushq   %r15
 
     # open "/proc"
     movq    $2, %rax
@@ -764,19 +760,18 @@ dw_namecopied:
     syscall
     cmpq    $0, %rax
     jl      dw_next
-    movq    %rax, %r11
+    movq    %rax, %r15
 
     # read comm
-    movq    $0, out_tmp(%rip)
     movq    $0, %rax
-    movq    %r11, %rdi
+    movq    %r15, %rdi
     leaq    out_tmp(%rip), %rsi
     movq    $7, %rdx
     syscall
 
     pushq   %rax
     movq    $3, %rax
-    movq    %r11, %rdi
+    movq    %r15, %rdi
     syscall
     popq    %rax
 
@@ -812,6 +807,7 @@ dw_closeproc:
     syscall
 
 dw_done:
+    popq    %r15
     popq    %rbx
     popq    %r14
     popq    %r13
