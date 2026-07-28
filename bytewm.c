@@ -1257,7 +1257,8 @@ scratchpadhide(void)
 	if (!scratchpad) return;
 	XUnmapWindow(dpy, scratchpad->win);
 	scratchpad->tags = 0;
-	focus(NULL, 0);
+	if (selmon->sel == scratchpad)
+		focus(NULL, 0);
 	arrange(selmon);
 	drawbars();
 }
@@ -1690,8 +1691,6 @@ unmanage(Client *c, int destroyed)
 
 	if (c == scratchpad) scratchpad = NULL;
 
-	XChangeProperty(dpy, root, netatom[NetClientList], XA_WINDOW, 32,
-		PropModePrepend, (unsigned char *)&(Window){0}, 0);
 	detach(c);
 	detachstack(c);
 
