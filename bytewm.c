@@ -520,7 +520,17 @@ setborder(Client *c, int focused)
 void
 focus(Client *c, int raise)
 {
-	if (!c || !ISVISIBLE(c, c->mon->tags)) return;
+	if (!c) {
+		for (c = selmon->stack; c && !ISVISIBLE(c, selmon->tags); c = c->snext);
+		if (!c) {
+			selmon->sel = NULL;
+			XSetInputFocus(dpy, root, RevertToPointerRoot, CurrentTime);
+			XDeleteProperty(dpy, root, netatom[NetActiveWindow]);
+			drawbars();
+			return;
+		}
+	}
+	if (!ISVISIBLE(c, c->mon->tags)) return;
 	Monitor *m = c->mon;
 	if (selmon != m) {
 		if (selmon && selmon->sel)
@@ -664,9 +674,9 @@ showhide(Client *c)
 {
 	for (Client *walk = c; walk; walk = walk->snext) {
 		if (ISVISIBLE(walk, walk->mon->tags))
-			XMapWindow(dpy, walk->win);
+			XMoveWindow(dpy, walk->win, walk->x, walk->y);
 		else
-			XUnmapWindow(dpy, walk->win);
+			XMoveWindow(dpy, walk->win, WIDTH(*walk) * -2, walk->y);
 	}
 }
 
@@ -1054,6 +1064,7 @@ drawbar(Monitor *m)
 			int avail = 140;
 			if (avail > 20 && textwidth(winname) > avail) {
 				int n = (int)strlen(winname);
+				if (n > 252) n = 252;
 				while (n > 4 && textwidth(winname) + 14 > avail) {
 					winname[--n] = '\0';
 				}
@@ -2052,11 +2063,8 @@ unmapnotify(XEvent *e)
 {
 	XUnmapEvent *ev = &e->xunmap;
 	Client *c = wintoclient(ev->window);
-	if (c && ev->send_event) {
-		if (c == scratchpad)
-			scratchpadhide();
-		unmanage(c, 0);
-	}
+	if (!c || c == scratchpad) return;
+	unmanage(c, 0);
 }
 
 /* ---- monitor management ---- */
