@@ -24,6 +24,19 @@ clr_gray:      .ascii  "\033[38;5;246m"
 clr_light:     .ascii  "\033[38;5;223m"
 clr_red:       .ascii  "\033[38;5;124m"
 clr_yellow:    .ascii  "\033[38;5;178m"
+clr_green:     .ascii  "\033[38;5;142m"
+clr_purple:    .ascii  "\033[38;5;132m"
+
+# ── background colors for palette ─────────────────────
+bg_blk:        .ascii  "\033[40m"       # color 0
+bg_red:        .ascii  "\033[41m"       # color 1
+bg_grn:        .ascii  "\033[42m"       # color 2
+bg_yel:        .ascii  "\033[43m"       # color 3
+bg_blu:        .ascii  "\033[44m"       # color 4
+bg_pur:        .ascii  "\033[45m"       # color 5
+bg_cyn:        .ascii  "\033[46m"       # color 6
+bg_wht:        .ascii  "\033[47m"       # color 7
+pal_block:     .asciz  "  "
 
 
 # ── string constants ───────────────────────────────────
@@ -39,14 +52,24 @@ str_mb:        .asciz  " GB"
 str_fallback:  .asciz  "Linux"
 
 # ── label strings ──────────────────────────────────────
-lbl_pkgs:      .asciz  "  \033[38;5;108mpkgs    \033[38;5;246m"
-lbl_wm:         .asciz  "  \033[38;5;108mwm      \033[38;5;246m"
-lbl_os:        .asciz  "  \033[38;5;108mos      \033[38;5;246m"
-lbl_kernel:    .asciz  "  \033[38;5;108mkernel  \033[38;5;246m"
-lbl_uptime:    .asciz  "  \033[38;5;108muptime  \033[38;5;246m"
-lbl_cpu:       .asciz  "  \033[38;5;108mcpu     \033[38;5;246m"
-lbl_gpu:       .asciz  "  \033[38;5;108mgpu     \033[38;5;246m"
-lbl_mem:       .asciz  "  \033[38;5;108mmem     \033[38;5;246m"
+lbl_os:        .asciz  "  \033[38;5;178mos      \033[38;5;246m"
+lbl_wm:        .asciz  "  \033[38;5;178mwm      \033[38;5;246m"
+lbl_pkgs:      .asciz  "  \033[38;5;178mpkgs    \033[38;5;246m"
+lbl_kernel:    .asciz  "  \033[38;5;178mkernel  \033[38;5;246m"
+lbl_uptime:    .asciz  "  \033[38;5;178muptime  \033[38;5;246m"
+lbl_cpu:       .asciz  "  \033[38;5;178mcpu     \033[38;5;246m"
+lbl_gpu:       .asciz  "  \033[38;5;178mgpu     \033[38;5;246m"
+lbl_mem:       .asciz  "  \033[38;5;178mmem     \033[38;5;246m"
+
+# ── arch logo (each line padded to 20 chars) ──────────
+arch_logo_0:   .asciz  "          /\\        "
+arch_logo_1:   .asciz  "         /  \\       "
+arch_logo_2:   .asciz  "        /    \\      "
+arch_logo_3:   .asciz  "       /      \\     "
+arch_logo_4:   .asciz  "      /   ,,   \\    "
+arch_logo_5:   .asciz  "     /   |  |  -\\   "
+arch_logo_6:   .asciz  "    /_-''    ''-_\\  "
+logo_pad:      .asciz  "                    "  # 20 spaces
 
 .section .data
 gres:          .quad   0
@@ -162,8 +185,8 @@ print_labeled:
 # prints: "  user@host"
 print_hostline:
     pushq   %r12
-    # aqua hostname
-    leaq    clr_aqua(%rip), %rsi
+    # orange hostname
+    leaq    clr_orange(%rip), %rsi
     movq    $11, %rdx
     movq    $1, %rdi
     call    print_raw
@@ -180,8 +203,8 @@ print_hostline:
     movq    $1, %rdi
     call    printz
 
-    # aqua OS name
-    leaq    clr_aqua(%rip), %rsi
+    # light OS name
+    leaq    clr_light(%rip), %rsi
     movq    $11, %rdx
     movq    $1, %rdi
     call    print_raw
@@ -194,6 +217,78 @@ print_hostline:
     movq    $1, %rdi
     call    printz
 
+    popq    %r12
+    ret
+
+# print_logo_line(%rdi = logo_str)
+# prints logo in orange + reset (no newline)
+print_logo_line:
+    pushq   %r12
+    movq    %rdi, %r12
+
+    leaq    clr_orange(%rip), %rsi
+    movq    $11, %rdx
+    movq    $1, %rdi
+    call    print_raw
+    movq    %r12, %rsi
+    movq    $1, %rdi
+    call    printz
+
+    leaq    clr_reset(%rip), %rsi
+    movq    $4, %rdx
+    movq    $1, %rdi
+    call    print_raw
+
+    popq    %r12
+    ret
+
+# print_hostline_nolf()
+# prints hostname@OS without trailing newline
+print_hostline_nolf:
+    pushq   %r12
+    leaq    clr_orange(%rip), %rsi
+    movq    $11, %rdx
+    movq    $1, %rdi
+    call    print_raw
+    leaq    out_host(%rip), %rsi
+    movq    $1, %rdi
+    call    printz
+
+    leaq    clr_gray(%rip), %rsi
+    movq    $11, %rdx
+    movq    $1, %rdi
+    call    print_raw
+    leaq    str_at(%rip), %rsi
+    movq    $1, %rdi
+    call    printz
+
+    leaq    clr_light(%rip), %rsi
+    movq    $11, %rdx
+    movq    $1, %rdi
+    call    print_raw
+    leaq    out_os(%rip), %rsi
+    movq    $1, %rdi
+    call    printz
+
+    popq    %r12
+    ret
+
+# print_pal_block(%rdi = bg_color_str)
+# prints: bg_color + "  " (2 spaces)
+print_pal_block:
+    pushq   %r12
+    movq    %rdi, %r12
+    leaq    clr_reset(%rip), %rsi
+    movq    $4, %rdx
+    movq    $1, %rdi
+    call    print_raw
+    movq    %r12, %rsi
+    movq    $5, %rdx              # 5 bytes for \033[XXm
+    movq    $1, %rdi
+    call    print_raw
+    leaq    pal_block(%rip), %rsi
+    movq    $1, %rdi
+    call    printz
     popq    %r12
     ret
 
@@ -1228,54 +1323,107 @@ gg_done:
 _start:
     call    gather_sys
 
-    # ── print header ──
-    movq    $1, %rdi                # fd = stdout
-    call    print_title
-
-    # ── host@os line ──
+    # ── gap at top ──
     movq    $1, %rdi
-    call    print_hostline
+    leaq    str_newline(%rip), %rsi
+    call    printz
 
-    # ── info lines ──
+    # ── info lines with logo ──
+    leaq    arch_logo_0(%rip), %rdi
+    call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_os(%rip), %rsi
     leaq    out_os(%rip), %rdx
     call    print_labeled
 
+    leaq    arch_logo_1(%rip), %rdi
+    call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_wm(%rip), %rsi
     leaq    out_wm(%rip), %rdx
     call    print_labeled
 
+    leaq    arch_logo_2(%rip), %rdi
+    call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_pkgs(%rip), %rsi
     leaq    out_pkgs(%rip), %rdx
     call    print_labeled
 
+    leaq    arch_logo_3(%rip), %rdi
+    call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_kernel(%rip), %rsi
     leaq    out_kernel(%rip), %rdx
     call    print_labeled
 
+    leaq    arch_logo_4(%rip), %rdi
+    call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_uptime(%rip), %rsi
     leaq    out_uptime(%rip), %rdx
     call    print_labeled
 
+    leaq    arch_logo_5(%rip), %rdi
+    call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_cpu(%rip), %rsi
     leaq    out_cpu(%rip), %rdx
     call    print_labeled
 
+    leaq    arch_logo_6(%rip), %rdi
+    call    print_logo_line
     movq    $1, %rdi
     leaq    lbl_gpu(%rip), %rsi
     leaq    out_gpu(%rip), %rdx
     call    print_labeled
 
+    # ── mem (no logo) ──
+    leaq    logo_pad(%rip), %rsi
+    movq    $1, %rdi
+    call    printz
     movq    $1, %rdi
     leaq    lbl_mem(%rip), %rsi
     leaq    out_mem(%rip), %rdx
     call    print_labeled
+
+    # ── gap ──
+    leaq    str_newline(%rip), %rsi
+    movq    $1, %rdi
+    call    printz
+
+    # ── color palette ──
+    leaq    logo_pad(%rip), %rsi
+    movq    $1, %rdi
+    call    printz
+    leaq    str_space(%rip), %rsi
+    movq    $1, %rdi
+    call    printz
+
+    leaq    bg_blk(%rip), %rdi
+    call    print_pal_block
+    leaq    bg_red(%rip), %rdi
+    call    print_pal_block
+    leaq    bg_grn(%rip), %rdi
+    call    print_pal_block
+    leaq    bg_yel(%rip), %rdi
+    call    print_pal_block
+    leaq    bg_blu(%rip), %rdi
+    call    print_pal_block
+    leaq    bg_pur(%rip), %rdi
+    call    print_pal_block
+    leaq    bg_cyn(%rip), %rdi
+    call    print_pal_block
+    leaq    bg_wht(%rip), %rdi
+    call    print_pal_block
+
+    leaq    clr_reset(%rip), %rsi
+    movq    $4, %rdx
+    movq    $1, %rdi
+    call    print_raw
+    leaq    str_newline(%rip), %rsi
+    movq    $1, %rdi
+    call    printz
 
     # ── final newline ──
     leaq    str_newline(%rip), %rsi
