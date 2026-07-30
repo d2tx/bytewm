@@ -17,7 +17,7 @@
 #define PAGE_COL   6
 #define ITEM_H     30
 #define WIN_W      420
-#define GAME_W     700
+#define GAME_W     520
 #define BORDER_W   2
 
 static Display *dpy;
