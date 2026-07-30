@@ -68,7 +68,7 @@ APPS
 
   bytefetch    System info (neofetch-like), pure asm
   bytelaunch   dmenu-style app launcher
-  bytemenu     Favorite apps quick-launcher
+  bytemenu     Favorite apps quick-launcher + games submenu
   byteswitch   Window switcher (Alt+Tab)
   bytesnap     Screenshot utility
   bytepick     Color picker (click screen for hex)
@@ -79,3 +79,27 @@ APPS
   bytepass     Password generator (x86_64 asm)
   bytekill     Process killer (x86_64 asm)
   bytewdm      Display manager (login greeter)
+
+
+GAMES (bytemenu submenu)
+
+  Select "Games" in bytemenu to open the games submenu.
+  Games are listed alphabetically in two columns with pagination.
+
+  Config: ~/.config/bytemenu/games.conf
+  Format: GameName|exepath|protonpath (one line per game)
+
+  Example:
+    Silent Hill 2|~/Games/silent-hill-2/sh2pc.exe|~/.local/share/Steam/compatibilitytools.d/GE-Proton9-20
+    Hollow Knight|~/Games/hollow-knight/Hollow Knight.exe|~/.local/share/Steam/compatibilitytools.d/GE-Proton9-20
+    Cuphead|~/Games/cuphead/Cuphead.exe|~/.local/share/Steam/compatibilitytools.d/GE-Proton9-20
+
+  Launch command is auto-generated:
+    WINEPREFIX=<parent_dir_of_exe> PROTONPATH=<proton_path> umu-run <exe_path>
+
+  Keybinds in submenu:
+    j/k         Navigate up/down
+    h/l         Switch columns
+    [/]         Previous/next page
+    Enter       Launch game
+    Esc         Back to main menu
