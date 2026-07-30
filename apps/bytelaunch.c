@@ -16,6 +16,7 @@
 #define MAX_ITEMS 16384
 #define MAX_VISIBLE 16
 #define INPUT_MAX  255
+#define BORDER_W   2
 
 static Display *dpy;
 static Window  win;
@@ -32,7 +33,7 @@ static char  *matches[MAX_ITEMS];
 static int    n_matches;
 static int    selected;
 
-static unsigned long bgcol, fgcol, selcol;
+static unsigned long bgcol, fgcol, selcol, bordercol;
 
 static unsigned long
 getcol(const char *s)
@@ -130,6 +131,13 @@ draw(void)
 	XMoveResizeWindow(dpy, win, winx, winy, winw, height);
 	XSetForeground(dpy, gc, bgcol);
 	XFillRectangle(dpy, win, gc, 0, 0, winw, height);
+
+	XSetForeground(dpy, gc, bordercol);
+	XFillRectangle(dpy, win, gc, 0, 0, winw, BORDER_W);
+	XFillRectangle(dpy, win, gc, 0, height - BORDER_W, winw, BORDER_W);
+	XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, height);
+	XFillRectangle(dpy, win, gc, winw - BORDER_W, 0, BORDER_W, height);
+	XFillRectangle(dpy, win, gc, 0, bh, winw, BORDER_W);
 
 	int ty = (bh - (font->ascent + font->descent)) / 2 + font->ascent;
 
@@ -252,6 +260,7 @@ main(void)
 	bgcol = getcol("#282828");
 	fgcol = getcol("#ebdbb2");
 	selcol= getcol("#689d6a");
+	bordercol = getcol("#689d6a");
 
 	scan_path();
 	if (!n_items) { XFreeFont(dpy, font); XCloseDisplay(dpy); return 1; }
