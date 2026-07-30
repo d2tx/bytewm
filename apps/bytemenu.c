@@ -31,6 +31,7 @@ static int submenu;
 static char *game_labels[MAX_GAMES];
 static char *game_exe[MAX_GAMES];
 static char *game_proton[MAX_GAMES];
+static char *game_extra[MAX_GAMES];
 static char *game_commands[MAX_GAMES];
 static char game_cmd_buf[MAX_GAMES][4096];
 static int game_count, game_sel, game_col, game_page, game_page_max;
@@ -50,6 +51,7 @@ static void sort_games(void) {
 				char *tl = game_labels[i]; game_labels[i] = game_labels[j]; game_labels[j] = tl;
 				char *te = game_exe[i]; game_exe[i] = game_exe[j]; game_exe[j] = te;
 				char *tp = game_proton[i]; game_proton[i] = game_proton[j]; game_proton[j] = tp;
+				char *tx = game_extra[i]; game_extra[i] = game_extra[j]; game_extra[j] = tx;
 				char *tc = game_commands[i]; game_commands[i] = game_commands[j]; game_commands[j] = tc;
 			}
 		}
@@ -98,7 +100,8 @@ static void build_game_command(int idx) {
 		snprintf(prefix_expanded, sizeof(prefix_expanded), "%s", wineprefix);
 
 	snprintf(game_cmd_buf[idx], 4096,
-		"WINEPREFIX=%s PROTONPATH=%s umu-run %s",
+		"%s WINEPREFIX=%s PROTONPATH=%s umu-run %s",
+		game_extra[idx] ? game_extra[idx] : "",
 		prefix_expanded, proton_expanded, exe_expanded);
 	game_commands[idx] = game_cmd_buf[idx];
 }
@@ -121,11 +124,18 @@ static void read_games_config(void) {
 		if (!exe_path) continue;
 		*exe_path++ = 0;
 		char *proton_path = strchr(exe_path, '|');
+		char *extra = NULL;
 		if (!proton_path) {
 			/* 3-field format: label|exe|proton_path */
 			proton_path = exe_path;
 		} else {
 			*proton_path++ = 0;
+			char *ep = strchr(proton_path, '|');
+			if (ep) {
+				*ep++ = 0;
+				while (*ep == ' ') ep++;
+				if (*ep) extra = ep;
+			}
 		}
 		/* trim spaces */
 		while (*p == ' ') p++;
@@ -135,6 +145,7 @@ static void read_games_config(void) {
 		game_labels[game_count] = strdup(line);
 		game_exe[game_count] = strdup(p);
 		game_proton[game_count] = strdup(proton_path);
+		game_extra[game_count] = extra ? strdup(extra) : NULL;
 		game_commands[game_count] = game_cmd_buf[game_count];
 		if (!game_labels[game_count] || !game_exe[game_count] ||
 		    !game_proton[game_count]) {
