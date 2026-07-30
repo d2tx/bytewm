@@ -86,8 +86,7 @@ GAMES (bytemenu submenu)
   Select "Games" in bytemenu to open the games submenu.
   Games are listed alphabetically in two columns with pagination.
 
-  Config: ~/.config/bytemenu/games.conf
-  Format is documented in the config file with an example.
+  Config: ~/.config/bytemenu/games.conf (see examples/games.conf)
 
   Keybinds in submenu:
     j/k         Navigate up/down
