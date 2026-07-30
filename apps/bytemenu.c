@@ -249,17 +249,6 @@ static void draw_games(void) {
 		int page_tw = XTextWidth(xfont, page_str, strlen(page_str));
 		XSetForeground(dpy, gc, c_dim);
 		XDrawString(dpy, win, gc, GAME_W - page_tw - 12, win_h - 20, page_str, strlen(page_str));
-
-		/* draw < indicator */
-		if (game_page > 0) {
-			XSetForeground(dpy, gc, c_border);
-			XDrawString(dpy, win, gc, 12, win_h - 20, "<", 1);
-		}
-		/* draw > indicator */
-		if (game_page < game_page_max) {
-			XSetForeground(dpy, gc, c_border);
-			XDrawString(dpy, win, gc, GAME_W - 24, win_h - 20, ">", 1);
-		}
 	}
 
 	XSync(dpy, False);
