@@ -10,30 +10,30 @@ class Scheme(ColorScheme):
 
         elif context.in_browser:
             if context.selected:
-                fg = 235  # bg1
-                bg = 142  # aqua/green
+                fg = 235  # bg0
+                bg = 108  # aqua
             elif context.directory:
-                fg = 142  # aqua
+                fg = 108  # aqua
             elif context.executable and not context.media:
-                fg = 208  # orange
+                fg = 172  # orange
             elif context.media:
-                fg = 132  # purple
+                fg = 139  # purple
             elif context.link:
-                fg = 109  # blue
+                fg = 73   # blue
             elif context.tag_marker and not context.selected:
-                fg = 178  # yellow
+                fg = 179  # yellow
                 attr |= bold
 
         elif context.in_titlebar:
-            fg = 223
-            bg = 237
+            fg = 223  # fg
+            bg = 237  # bg1
 
         elif context.in_statusbar:
             if context.selected:
-                fg = 235
-                bg = 142
+                fg = 235  # bg0
+                bg = 108  # aqua
             else:
-                fg = 246
-                bg = 237
+                fg = 244  # gray
+                bg = 237  # bg1
 
         return fg, bg, attr
