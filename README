@@ -87,15 +87,18 @@ GAMES (bytemenu submenu)
   Games are listed alphabetically in two columns with pagination.
 
   Config: ~/.config/bytemenu/games.conf
-  Format: GameName|exepath|protonpath (one line per game)
+  Format: GameName|exepath|protonpath [|extra_args] (one line per game)
 
   Example:
     Silent Hill 2|~/Games/silent-hill-2/sh2pc.exe|~/.local/share/Steam/compatibilitytools.d/GE-Proton9-20
-    Hollow Knight|~/Games/hollow-knight/Hollow Knight.exe|~/.local/share/Steam/compatibilitytools.d/GE-Proton9-20
-    Cuphead|~/Games/cuphead/Cuphead.exe|~/.local/share/Steam/compatibilitytools.d/GE-Proton9-20
+    Doom|~/Games/doom/doom.wad|~/.local/share/Steam/compatibilitytools.d/GE-Proton9-20|PROTON_USE_WINED3D=1
+    Hollow Knight|~/Games/hollow-knight/Hollow Knight.exe|~/.local/share/Steam/compatibilitytools.d/GE-Proton9-20|DXVK_HUD=fps MANGOHUD=1
+
+  Optional 4th field: extra env vars or args prepended before umu-run.
+  Supports spaces-separated KEY=VALUE pairs (e.g. PROTON_USE_WINED3D=1 DXVK_HUD=fps).
 
   Launch command is auto-generated:
-    WINEPREFIX=<parent_dir_of_exe> PROTONPATH=<proton_path> umu-run <exe_path>
+    [extra_args] WINEPREFIX=<parent_dir_of_exe> PROTONPATH=<proton_path> umu-run <exe_path>
 
   Keybinds in submenu:
     j/k         Navigate up/down
