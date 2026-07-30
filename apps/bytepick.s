@@ -39,6 +39,7 @@ clr_reset_nl:    .asciz  "\033[0m\n"
 envp_save:       .quad   0
 xdpy:            .quad   0
 xroot:           .quad   0
+cursor_val:      .quad   0
 ximg:            .quad   0
 red_val:         .quad   0
 green_val:       .quad   0
@@ -57,6 +58,7 @@ outbuf:          .fill   128, 1, 0
 .extern XUngrabPointer, XUngrabKeyboard
 .extern XNextEvent, XCloseDisplay, XSync
 .extern XGetImage, XGetPixel, XDestroyImage
+.extern XCreateFontCursor, XFreeCursor
 
 _strlen:
     xorq    %rcx, %rcx
@@ -302,9 +304,15 @@ main:
     call    XRootWindow
     movq    %rax, xroot(%rip)
 
+    # create crosshair cursor
+    movq    xdpy(%rip), %rdi
+    movq    $34, %rsi
+    call    XCreateFontCursor
+    movq    %rax, cursor_val(%rip)
+
     subq    $8, %rsp
     pushq   $CurrentTime
-    pushq   $0
+    pushq   cursor_val(%rip)
     pushq   $0
     movq    xdpy(%rip), %rdi
     movq    xroot(%rip), %rsi
@@ -435,6 +443,12 @@ cleanup:
     movq    $CurrentTime, %rsi
     call    XUngrabKeyboard
 
+    movq    %r12, %rdi
+    movq    cursor_val(%rip), %rsi
+    testq   %rsi, %rsi
+    jz      1f
+    call    XFreeCursor
+1:
     movq    %r12, %rdi
     xorq    %rsi, %rsi
     call    XSync
