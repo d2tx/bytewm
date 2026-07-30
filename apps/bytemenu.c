@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #define MAX_ITEMS  24
 #define MAX_GAMES  256
@@ -121,8 +122,10 @@ static void read_games_config(void) {
 		*exe_path++ = 0;
 		char *proton_path = strchr(exe_path, '|');
 		if (!proton_path) {
-			/* no proton path, use default */
-			proton_path = "~/.local/share/Steam/compatibilitytools.d/GE-Proton/proton";
+			/* 3-field format: label|exe|proton_path */
+			proton_path = exe_path;
+		} else {
+			*proton_path++ = 0;
 		}
 		/* trim spaces */
 		while (*p == ' ') p++;
@@ -302,9 +305,11 @@ static void launch(void) {
 }
 
 static void launch_game(int idx) {
-	if (!game_commands[idx]) return;
+	if (idx < 0 || idx >= game_count || !game_commands[idx]) return;
 	if (fork() == 0) {
 		setsid();
+		int fd = open("/dev/null", O_RDWR);
+		if (fd >= 0) { dup2(fd, STDOUT_FILENO); dup2(fd, STDERR_FILENO); close(fd); }
 		execl("/bin/sh", "/bin/sh", "-c", game_commands[idx], NULL);
 		_exit(1);
 	}
