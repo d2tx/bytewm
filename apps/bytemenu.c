@@ -7,6 +7,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <signal.h>
+#include <sys/stat.h>
 
 #define MAX_ITEMS  24
 #define MAX_GAMES  256
@@ -35,6 +38,25 @@ static char *game_extra[MAX_GAMES];
 static char *game_commands[MAX_GAMES];
 static char game_cmd_buf[MAX_GAMES][4096];
 static int game_count, game_sel, game_col, game_page, game_page_max;
+
+static char lockpath[256];
+static int lockacquired;
+
+static void cleanup_lock(void) {
+	if (lockacquired) {
+		char pidfile[512];
+		snprintf(pidfile, sizeof(pidfile), "%s/pid", lockpath);
+		unlink(pidfile);
+		rmdir(lockpath);
+		lockacquired = 0;
+	}
+}
+
+static void sigcleanup(int unused) {
+	(void)unused;
+	cleanup_lock();
+	_exit(1);
+}
 
 static unsigned long getcol(const char *s) {
 	XColor xc;
@@ -316,6 +338,49 @@ static void launch_game(int idx) {
 }
 
 int main(void) {
+	snprintf(lockpath, sizeof(lockpath), "/tmp/bytemenu-%u.lock",
+	         (unsigned int)getuid());
+	if (mkdir(lockpath, 0700) != 0) {
+		if (errno == EEXIST) {
+			char pidfile[512];
+			snprintf(pidfile, sizeof(pidfile), "%s/pid", lockpath);
+			FILE *pf = fopen(pidfile, "r");
+			if (pf) {
+				pid_t oldpid = 0;
+				if (fscanf(pf, "%d", &oldpid) == 1 && oldpid > 0
+				    && kill(oldpid, 0) != 0 && errno == ESRCH) {
+					fclose(pf);
+					unlink(pidfile);
+					rmdir(lockpath);
+					if (mkdir(lockpath, 0700) != 0) return 0;
+				} else {
+					fclose(pf);
+					return 0;
+				}
+			} else {
+				return 0;
+			}
+		} else {
+			return 0;
+		}
+	}
+	lockacquired = 1;
+	{
+		char pidfile[512];
+		snprintf(pidfile, sizeof(pidfile), "%s/pid", lockpath);
+		FILE *pf = fopen(pidfile, "w");
+		if (pf) {
+			fprintf(pf, "%d\n", (int)getpid());
+			fclose(pf);
+		}
+	}
+	atexit(cleanup_lock);
+	signal(SIGTERM, sigcleanup);
+	signal(SIGINT, sigcleanup);
+	signal(SIGHUP, sigcleanup);
+	signal(SIGQUIT, sigcleanup);
+	signal(SIGPIPE, sigcleanup);
+
 	read_config();
 	if (!count) {
 		labels[0] = strdup("Terminal");   commands[0] = strdup("st");
