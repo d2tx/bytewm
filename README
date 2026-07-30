@@ -87,13 +87,7 @@ GAMES (bytemenu submenu)
   Games are listed alphabetically in two columns with pagination.
 
   Config: ~/.config/bytemenu/games.conf
-  Format: GameName|exepath|protonpath [|extra_args] (one line per game)
-
-  Optional 4th field: extra env vars or args prepended before umu-run.
-  Supports spaces-separated KEY=VALUE pairs (e.g. PROTON_USE_WINED3D=1 DXVK_HUD=fps).
-
-  Launch command is auto-generated:
-    [extra_args] WINEPREFIX=<parent_dir_of_exe> PROTONPATH=<proton_path> umu-run <exe_path>
+  Format is documented in the config file with an example.
 
   Keybinds in submenu:
     j/k         Navigate up/down
