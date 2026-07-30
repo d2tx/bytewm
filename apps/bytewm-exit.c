@@ -1,5 +1,6 @@
 /* bytewm-exit - logout/restart/shutdown dialog */
 #define _POSIX_C_SOURCE 200809L
+#define BORDER_W 2
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
@@ -41,7 +42,7 @@ getcol(const char *c)
 	return xc.pixel;
 }
 
-static unsigned long cbg, cfg, cselbg, cselfg;
+static unsigned long cbg, cfg, cselbg, cselfg, cborder;
 
 static void
 redraw(void)
@@ -68,6 +69,12 @@ redraw(void)
 
 	XSetForeground(dpy, gc, cbg);
 	XFillRectangle(dpy, win, gc, 0, 0, winw, winh);
+
+	XSetForeground(dpy, gc, cborder);
+	XFillRectangle(dpy, win, gc, 0, 0, winw, BORDER_W);
+	XFillRectangle(dpy, win, gc, 0, winh - BORDER_W, winw, BORDER_W);
+	XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, winh);
+	XFillRectangle(dpy, win, gc, winw - BORDER_W, 0, BORDER_W, winh);
 
 	for (int i = 0; i < nitems; i++) {
 		int tw = XTextWidth(xfont, items[i], strlen(items[i]));
@@ -120,6 +127,7 @@ main(int argc, char *argv[])
 	cfg = getcol(fg);
 	cselbg = getcol(selbg);
 	cselfg = getcol(selfg);
+	cborder = getcol("#689d6a");
 
 	int maxw = 0;
 	for (int i = 0; i < nitems; i++) {
@@ -138,7 +146,7 @@ main(int argc, char *argv[])
 		.override_redirect = True,
 		.background_pixel = cbg,
 	};
-	win = XCreateWindow(dpy, root, winx, winy, winw, winh, 1,
+	win = XCreateWindow(dpy, root, winx, winy, winw, winh, 0,
 		DefaultDepth(dpy, screen), CopyFromParent,
 		DefaultVisual(dpy, screen),
 		CWOverrideRedirect|CWBackPixel, &wa);
