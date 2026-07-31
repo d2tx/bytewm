@@ -42,8 +42,8 @@ show_volume(int vol)
 	int tw = XTextWidth(xfont, label, strlen(label)) + 16;
 	int bw = 100;
 	int w = tw + bw + 24;
-	int x = sw - w - 8;
-	int y = 36;
+	int x = (sw - w) / 2;
+	int y = (sh - bh) / 2;
 
 	XMoveResizeWindow(dpy, win, x, y, w, bh);
 	XMapRaised(dpy, win);

@@ -24,9 +24,12 @@ static const char *fg = "#ebdbb2";
 static const char *border = "#689d6a";
 static const char *fifo_path = "/tmp/bytify.fifo";
 
-#define POPUP_W  280
+#define POPUP_W  300
 #define POPUP_MARGIN  12
 #define HIDE_AFTER  3
+#define MAXLINES  5
+#define LINE_MAX  256
+#define TXT_PAD  8
 
 static unsigned long
 getcol(const char *c)
@@ -48,7 +51,59 @@ draw(void)
 		XSync(dpy, False);
 		return;
 	}
-	int tw = XTextWidth(xfont, msg, strlen(msg));
+
+	/* wrap message into at most MAXLINES centered lines */
+	char lines[MAXLINES][LINE_MAX];
+	int nlines = 0;
+	{
+		int maxpx = POPUP_W - 2 * TXT_PAD - 2;
+		char line[LINE_MAX];
+		size_t linelen = 0;
+		const char *p = msg;
+		int more = 0;
+		while (*p && nlines < MAXLINES) {
+			while (*p == ' ') p++;
+			if (!*p) break;
+			const char *start = p;
+			while (*p && *p != ' ') p++;
+			int wlen = (int)(p - start);
+			int ww = XTextWidth(xfont, start, wlen);
+			int sepw = linelen ? XTextWidth(xfont, " ", 1) : 0;
+			if (linelen && (int)linelen + sepw + ww > maxpx) {
+				line[linelen] = '\0';
+				strncpy(lines[nlines], line, LINE_MAX - 1);
+				lines[nlines][LINE_MAX - 1] = '\0';
+				nlines++;
+				linelen = 0;
+				if (nlines == MAXLINES) {
+					while (*p == ' ') p++;
+					more = *p != '\0';
+					break;
+				}
+			}
+			if (linelen) line[linelen++] = ' ';
+			memcpy(line + linelen, start, (size_t)wlen);
+			linelen += (size_t)wlen;
+		}
+		if (nlines < MAXLINES && linelen) {
+			line[linelen] = '\0';
+			strncpy(lines[nlines], line, LINE_MAX - 1);
+			lines[nlines][LINE_MAX - 1] = '\0';
+			nlines++;
+		}
+		if (nlines == MAXLINES && more) {
+			/* trim last line to fit "..." */
+			char *l = lines[nlines - 1];
+			int ellw = XTextWidth(xfont, "...", 3);
+			int lw = XTextWidth(xfont, l, strlen(l));
+			while (lw + ellw > maxpx && strlen(l) > 0) {
+				l[strlen(l) - 1] = '\0';
+				lw = XTextWidth(xfont, l, strlen(l));
+			}
+			strcat(l, "...");
+		}
+	}
+
 	int x = sw - POPUP_W - POPUP_MARGIN;
 	int y = 36;
 
@@ -60,9 +115,14 @@ draw(void)
 	XSetForeground(dpy, gc, cbg);
 	XFillRectangle(dpy, win, gc, 1, 1, POPUP_W - 2, bh - 2);
 	XSetForeground(dpy, gc, cfg);
-	int tx = (POPUP_W - tw) / 2;
-	int ty = (bh - (xfont->ascent + xfont->descent)) / 2 + xfont->ascent;
-	XDrawString(dpy, win, gc, tx, ty, msg, strlen(msg));
+
+	int lineh = xfont->ascent + xfont->descent;
+	int ty = (bh - nlines * lineh) / 2 + xfont->ascent;
+	for (int i = 0; i < nlines; i++) {
+		int tw = XTextWidth(xfont, lines[i], strlen(lines[i]));
+		int tx = (POPUP_W - tw) / 2;
+		XDrawString(dpy, win, gc, tx, ty + i * lineh, lines[i], strlen(lines[i]));
+	}
 	XSync(dpy, 0);
 }
 
@@ -87,7 +147,7 @@ main(void)
 	xfont = XLoadQueryFont(dpy, font);
 	if (!xfont) xfont = XLoadQueryFont(dpy, "fixed");
 	if (!xfont) return 1;
-	bh = xfont->ascent + xfont->descent + 8;
+	bh = (xfont->ascent + xfont->descent) * MAXLINES + 12;
 
 	gc = XCreateGC(dpy, root, 0, NULL);
 
