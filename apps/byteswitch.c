@@ -26,6 +26,18 @@ static Window windows[MAX_WINS];
 static char *labels[MAX_WINS];
 static int count, sel;
 
+/* ignore transient X errors (windows destroyed while we run) */
+static int
+xerror_ignore(Display *d, XErrorEvent *e)
+{
+    (void)d;
+    if (e->error_code == BadWindow || e->error_code == BadMatch)
+        return 0;
+    fprintf(stderr, "byteswitch: X error %d on request %u\n",
+        e->error_code, e->request_code);
+    return 0;
+}
+
 static unsigned long getcol(const char *s) {
     XColor xc;
     Colormap cmap = DefaultColormap(dpy, DefaultScreen(dpy));
@@ -79,8 +91,19 @@ static char *get_window_title(Window w) {
 
     if (XGetWindowProperty(dpy, w, netname, 0, 256, False, utf8,
         &type, &fmt, &n, &extra, &prop) == Success && prop) {
-        free(title);
-        title = strdup((char *)prop);
+        /* property data may not be NUL-terminated: bound the copy */
+        unsigned long slen = 0;
+        if (fmt == 8 && (type == utf8 || type == XA_STRING)) {
+            while (slen < n && prop[slen]) slen++;
+        }
+        if (slen > 60) slen = 60;
+        char *ntitle = malloc(slen + 1);
+        if (ntitle) {
+            memcpy(ntitle, prop, slen);
+            ntitle[slen] = '\0';
+            free(title);
+            title = ntitle;
+        }
         XFree(prop);
     }
     if (title && strlen(title) > 60) title[60] = '\0';
@@ -102,7 +125,7 @@ static void activate_window(Window w) {
     cev.xclient.window = w;
     cev.xclient.message_type = netactive;
     cev.xclient.format = 32;
-    cev.xclient.data.l[0] = 2;          /* source: user */
+    cev.xclient.data.l[0] = 1;          /* source: application */
     cev.xclient.data.l[1] = CurrentTime;
     cev.xclient.data.l[2] = 0;
     XSendEvent(dpy, root, False,
@@ -133,6 +156,7 @@ static int is_autorepeat_release(XEvent *ev) {
 int main(void) {
     dpy = XOpenDisplay(NULL);
     if (!dpy) return 1;
+    XSetErrorHandler(xerror_ignore);
     int scr = DefaultScreen(dpy);
     root = RootWindow(dpy, scr);
     sw = DisplayWidth(dpy, scr);
@@ -153,7 +177,8 @@ int main(void) {
     unsigned long n, extra;
     unsigned char *data = NULL;
     if (XGetWindowProperty(dpy, root, netcl, 0, 1024, False,
-        XA_WINDOW, &type, &fmt, &n, &extra, &data) == Success && data) {
+        XA_WINDOW, &type, &fmt, &n, &extra, &data) == Success &&
+        data && type == XA_WINDOW && fmt == 32) {
         Window *wins = (Window *)data;
         for (unsigned long i = 0; i < n && count < MAX_WINS; i++) {
             if (is_ignored(wins[i])) continue;
@@ -188,6 +213,7 @@ int main(void) {
     win_h = 56 + count * ITEM_H + 24;
     if (win_h < 200) win_h = 200;
     if (win_h > sh - 40) win_h = sh - 40;
+    if (win_h < 100) win_h = 100;
 
     XSetWindowAttributes wa = {
         .override_redirect = True,
@@ -293,6 +319,7 @@ int main(void) {
 
     XSync(dpy, False);          /* flush activate before destroy */
     XFreeFont(dpy, xfont);
+    XFreeGC(dpy, gc);
     XDestroyWindow(dpy, win);
     XSync(dpy, False);          /* ensure server processes destroy */
     XCloseDisplay(dpy);
