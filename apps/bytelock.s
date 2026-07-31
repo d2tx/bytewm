@@ -20,18 +20,7 @@ str_incorrect:   .asciz  "incorrect"
 str_dots:        .ascii  "* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * "
                 .byte 0
 .equ DOT_STRIDE, 2
- 
-# debug
-logpath:         .asciz  "/tmp/bytelock.log"
-log_conv_called: .asciz  "[conv] called\n"
-log_auth_ret:    .asciz  "[auth] pam_authenticate returned: "
-log_start_fail:  .asciz  "[auth] pam_start FAILED\n"
-log_pw:          .asciz  "[conv] password=["
-log_end:         .asciz  "]\n"
-log_style:       .asciz  "[conv] msg_style="
-log_sp:          .asciz  " "
-log_nl:          .asciz  "\n"
- 
+
 .section .data
 # env pointer (set at startup)
 environ_ptr:     .quad   0
@@ -71,6 +60,7 @@ auth_error:      .quad   0
 .equ PAM_PROMPT_ECHO_ON,  2
 .equ PAM_ERROR_MSG,     3
 .equ PAM_TEXT_INFO,      4
+.equ PAM_BUF_ERR,        5
 .equ PAM_AUTH_ERR,       7
  
 .equ GrabModeAsync,     1
@@ -179,64 +169,95 @@ pam_converse:
     pushq   %r14
     pushq   %r15
     pushq   %rbx
- 
+    subq    $8, %rsp               # align stack to 16 for libc calls
+
     movq    %rdi, %r12             # num_msg
     movq    %rsi, %r13             # msg
     movq    %rdx, %r14             # resp out
- 
+
     # calloc(num_msg, 16) — 16 bytes per pam_response
     movq    %r12, %rdi
     movq    $16, %rsi
     call    calloc
+    testq   %rax, %rax
+    jz      pc_oom
     movq    %rax, %rbx             # response array
- 
+
     xorq    %r15, %r15             # i = 0
- 
+
 pc_loop:
     cmpq    %r12, %r15
     jae     pc_end
- 
+
     movq    (%r13, %r15, 8), %rdi  # msg[i]
     movl    (%rdi), %eax            # msg_style
- 
+
     cmpl    $PAM_PROMPT_ECHO_OFF, %eax
     je      pc_password
     cmpl    $PAM_PROMPT_ECHO_ON, %eax
     je      pc_username
- 
+
     # info/error: empty response — compute address fresh
     movq    %r15, %rax
     shlq    $4, %rax
     movq    $0, (%rbx, %rax)
     movl    $0, 8(%rbx, %rax)
     jmp     pc_next
- 
+
 pc_password:
     leaq    password(%rip), %rdi
     call    strdup                  # clobbers rdx/rcx
+    testq   %rax, %rax
+    jz      pc_oom
     movq    %r15, %rdx
     shlq    $4, %rdx
     movq    %rax, (%rbx, %rdx)     # resp[i].resp
     movl    $0, 8(%rbx, %rdx)       # resp[i].resp_retcode
     jmp     pc_next
- 
+
 pc_username:
     leaq    username(%rip), %rdi
     call    strdup
+    testq   %rax, %rax
+    jz      pc_oom
     movq    %r15, %rdx
     shlq    $4, %rdx
     movq    %rax, (%rbx, %rdx)
     movl    $0, 8(%rbx, %rdx)
     jmp     pc_next
- 
+
 pc_next:
     incq    %r15
     jmp     pc_loop
- 
+
+pc_oom:
+    # free any responses already allocated (indices 0..r15-1)
+    xorq    %rcx, %rcx
+pc_free_loop:
+    cmpq    %r15, %rcx
+    jae     pc_free_arr
+    movq    (%rbx, %rcx, 8), %rdi
+    testq   %rdi, %rdi
+    jz      pc_free_arr
+    subq    $16, %rsp
+    movq    %rcx, (%rsp)
+    call    free
+    movq    (%rsp), %rcx
+    addq    $16, %rsp
+    incq    %rcx
+    jmp     pc_free_loop
+pc_free_arr:
+    movq    %rbx, %rdi
+    call    free
+    movq    $0, (%r14)             # *resp = NULL
+    movq    $PAM_BUF_ERR, %rax
+    jmp     pc_return
+
 pc_end:
     movq    %rbx, (%r14)           # *resp = response array
     xorq    %rax, %rax             # PAM_SUCCESS
- 
+pc_return:
+    addq    $8, %rsp               # undo alignment
     popq    %rbx
     popq    %r15
     popq    %r14
@@ -599,11 +620,16 @@ main:
     xorq    %r8, %r8
     syscall
  
-    # mlock password buffer to prevent swap leakage
+    # mlock password + username buffers to prevent swap leakage.
+    # .bss is not page-aligned, so round password's address down to
+    # the page start and lock enough to cover the 320 bytes.
     movq    $149, %rax              # sys_mlock
     leaq    password(%rip), %rdi
     andq    $-4096, %rdi            # page-align down
-    movq    $4096, %rsi             # one page is enough
+    leaq    password+320(%rip), %rsi
+    subq    %rdi, %rsi              # length from page start to end of buffers
+    addq    $4095, %rsi
+    andq    $-4096, %rsi            # round length up to full pages
     syscall
  
     # ── get username ──

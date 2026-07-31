@@ -206,15 +206,16 @@ read_comm:
     syscall
     pushq   %rax
 
-    # strip trailing newline
-    leaq    commbuf(%rip), %rdi
+    # strip trailing newline (rsi = commbuf, rdi = fd preserved)
+    testq   %rax, %rax
+    jz      1f                     # nothing read, skip strip
     decq    %rax
-    cmpb    $'\n', (%rdi, %rax)
+    cmpb    $'\n', (%rsi, %rax)
     jne     1f
-    movb    $0, (%rdi, %rax)
+    movb    $0, (%rsi, %rax)
 1:
     movq    $3, %rax               # sys_close
-    syscall
+    syscall                         # rdi still = fd
 
     popq    %rax                   # bytes read
     jmp     rc_done
