@@ -20,8 +20,9 @@ static const char *font = "fixed";
 static const char *bg = "#282828";
 static const char *fg = "#ebdbb2";
 static const char *barcolor = "#689d6a";
+static const char *bordercolor = "#689d6a";
 
-static unsigned long fgcol, bgcol, barcol;
+static unsigned long fgcol, bgcol, barcol, bordercol;
 
 static unsigned long
 getcol(const char *c)
@@ -48,8 +49,10 @@ show_volume(int vol)
 	XMoveResizeWindow(dpy, win, x, y, w, bh);
 	XMapRaised(dpy, win);
 
+	XSetForeground(dpy, gc, bordercol);
+	XDrawRectangle(dpy, win, gc, 0, 0, w - 1, bh - 1);
 	XSetForeground(dpy, gc, bgcol);
-	XFillRectangle(dpy, win, gc, 0, 0, w, bh);
+	XFillRectangle(dpy, win, gc, 1, 1, w - 2, bh - 2);
 	XSetForeground(dpy, gc, fgcol);
 	int tx = 8;
 	int ty = (bh - (xfont->ascent + xfont->descent)) / 2 + xfont->ascent;
@@ -92,6 +95,7 @@ main(int argc, char *argv[])
 	bgcol = getcol(bg);
 	fgcol = getcol(fg);
 	barcol = getcol(barcolor);
+	bordercol = getcol(bordercolor);
 
 	XSetWindowAttributes wa = {
 		.override_redirect = True,
