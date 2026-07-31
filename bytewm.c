@@ -1615,6 +1615,11 @@ tagmon(const Arg *arg)
 		attachstack(c);
 		arrange(selmon);
 		arrange(m);
+		/* reconcile focus/border state: tagmon reorders the client
+		   list, so the previously-selected window's border must be
+		   cleared and c must become the selected client again,
+		   otherwise multiple windows end up with the focused border */
+		focus(c, 1);
 		drawbars();
 	}
 }
