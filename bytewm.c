@@ -2521,25 +2521,52 @@ updatestatus(void)
 
 	close(pipefd[1]);
 	{
-		FILE *fp = fdopen(pipefd[0], "r");
-		if (fp) {
-			struct pollfd pfd = { .fd = pipefd[0], .events = POLLIN };
-			if (poll(&pfd, 1, 100) > 0) {
-				if (fgets(status, sizeof(status), fp)) {
-					status[strcspn(status, "\n")] = '\0';
-					strncpy(status_cache, status, sizeof(status_cache) - 1);
-				} else {
-					strncpy(status, status_cache, sizeof(status) - 1);
-				}
+		/* drain the pipe nonblocking: status.sh emits the status in
+		   several writes with no trailing newline, so fgets() on a
+		   blocking stream could wait forever for a \n and freeze the
+		   WM loop. Poll+drain until the writer exits (EOF) or the
+		   budget expires; O_NONBLOCK guarantees reads never block. */
+		int flags = fcntl(pipefd[0], F_GETFL, 0);
+		if (flags >= 0)
+			fcntl(pipefd[0], F_SETFL, flags | O_NONBLOCK);
+		char rbuf[1024];
+		size_t rlen = 0;
+		struct pollfd pfd = { .fd = pipefd[0], .events = POLLIN };
+		int budget = 100;   /* ms */
+		int done = 0;
+		while (budget > 0 && !done) {
+			if (poll(&pfd, 1, budget) <= 0)
+				break;
+			for (;;) {
+				ssize_t nr = read(pipefd[0], rbuf + rlen,
+					sizeof(rbuf) - 1 - rlen);
+				if (nr == 0) { done = 1; break; }   /* writer exited */
+				if (nr < 0) break;                    /* EAGAIN */
+				rlen += (size_t)nr;
+				if (rlen >= sizeof(rbuf) - 1) { done = 1; break; }
+			}
+			budget = 100;   /* writer alive: keep waiting for EOF */
+		}
+		if (!done) {
+			/* status.sh hung without finishing: kill it and keep the
+			   previous good status (a partial line must not clobber
+			   status_cache) */
+			kill(status_pid, SIGKILL);
+			waitpid(status_pid, NULL, WNOHANG);
+			strncpy(status, status_cache, sizeof(status) - 1);
+		} else {
+			/* strip trailing newline(s) */
+			while (rlen > 0 && (rbuf[rlen - 1] == '\n' || rbuf[rlen - 1] == '\r'))
+				rlen--;
+			if (rlen > 0 && rlen < sizeof(status)) {
+				memcpy(status, rbuf, rlen);
+				status[rlen] = '\0';
+				strncpy(status_cache, status, sizeof(status_cache) - 1);
 			} else {
-				kill(status_pid, SIGKILL);
-				waitpid(status_pid, NULL, WNOHANG);
 				strncpy(status, status_cache, sizeof(status) - 1);
 			}
-			fclose(fp);
-		} else {
-			close(pipefd[0]);
 		}
+		close(pipefd[0]);
 	}
 
 fallback:
