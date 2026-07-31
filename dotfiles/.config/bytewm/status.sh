@@ -34,17 +34,14 @@ for n in /dev/nvme?n1; do
   [ -n "$df_out" ] && nvme="$nvme${nvme:+ }${n##*/}: ${df_out}"
 done
 
-# Volume
-vol=$(amixer get Master 2>/dev/null | awk -F'[][]' '/%/ {print $2, $6}' | head -1)
-[ -z "$vol" ] && vol=""
-case "$vol" in
-	*" off") vol="MUTE" ;;
-	*" on")  vol="${vol% on}" ;;
-esac
+# Volume (from bytevol daemon's perceptual level)
+vol=$(cat /tmp/bytevol_level 2>/dev/null)
+[ -z "$vol" ] && vol="0"
+[ "$vol" != "MUTE" ] && vol="${vol}%"
 
 datetime=$(date +"%I:%M %p")
 
-printf "VOL %s" "${vol:-0%}"
+printf "VOL %s" "$vol"
 printf " | CPU %d%% | MEM %s" "$cpu" "${mem_used}/${mem_total}M"
 [ -n "$cputemp" ] && printf " | CPU %d°C" "$cputemp"
 [ -n "$gputemp" ] && printf " | GPU %d°C" "$gputemp"

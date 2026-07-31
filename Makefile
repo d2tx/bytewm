@@ -16,7 +16,7 @@ APPS_CFLAGS = -std=c99 -pedantic -Wall -Os
 apps:
 	@for app in $(APPBINS); do \
 		if [ -f apps/$$app.c ]; then \
-			$(CC) $(APPS_CFLAGS) -o apps/$$app apps/$$app.c -lX11; \
+			$(CC) $(APPS_CFLAGS) -o apps/$$app apps/$$app.c -lX11 -lm; \
 		fi; \
 	done
 
