@@ -62,6 +62,17 @@ enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
        ClkClientWin, ClkRootWin, ClkLast };
 enum { SchemeNorm, SchemeSel, SchemeTag, SchemeUrg, SchemeLast };
 
+/* Motif WM hints for borderless windows (MWM_DECOR_NONE) */
+#define MWM_HINTS_DECORATIONS   (1L << 1)
+#define MWM_DECOR_NONE          0
+typedef struct {
+	unsigned long flags;
+	unsigned long functions;
+	unsigned long decorations;
+	long input_mode;
+	unsigned long status;
+} MotifWmHints;
+
 /* type definitions */
 typedef union {
 	int i;
@@ -1638,6 +1649,26 @@ manage(Window w, XWindowAttributes *wa)
 		}
 	}
 
+	/* check for MWM hints (borderless windows like feh fullscreen) */
+	{
+		Atom mwm = XInternAtom(dpy, "_MOTIF_WM_HINTS", False);
+		unsigned char *data = NULL;
+		unsigned long n;
+		Atom real;
+		int fmt;
+		if (mwm != None && XGetWindowProperty(dpy, w, mwm, 0L, sizeof(MotifWmHints)/4,
+		    False, AnyPropertyType, &real, &fmt, &n, &(unsigned long){0},
+		    &data) == Success && data && n >= 4) {
+			MotifWmHints *hints = (MotifWmHints *)data;
+			if (hints->flags & MWM_HINTS_DECORATIONS
+			    && hints->decorations == MWM_DECOR_NONE) {
+				c->isfloating = 1;
+				c->bw = 0;
+			}
+			XFree(data);
+		}
+	}
+
 	/* in floating layout, auto-float new windows and center them */
 	if (!selmon->lt[selmon->layout]->arrange) {
 		c->isfloating = 1;
@@ -2042,6 +2073,38 @@ propertynotify(XEvent *e)
 	}
 	if (ev->atom == XA_WM_NORMAL_HINTS)
 		updatesizehints(c);
+	{
+		Atom mwm = XInternAtom(dpy, "_MOTIF_WM_HINTS", False);
+		if (mwm != None && ev->atom == mwm) {
+			unsigned char *data = NULL;
+			unsigned long n;
+			Atom real;
+			int fmt;
+			if (XGetWindowProperty(dpy, c->win, mwm, 0L, sizeof(MotifWmHints)/4,
+			    False, AnyPropertyType, &real, &fmt, &n, &(unsigned long){0},
+			    &data) == Success && data && n >= 4) {
+				MotifWmHints *hints = (MotifWmHints *)data;
+				if (hints->flags & MWM_HINTS_DECORATIONS
+				    && hints->decorations == MWM_DECOR_NONE) {
+					if (!c->isfloating) {
+						c->isfloating = 1;
+						c->bw = 0;
+						XSetWindowBorderWidth(dpy, c->win, 0);
+						arrange(c->mon);
+						drawbars();
+					}
+				} else {
+					if (c->isfloating && c->bw == 0) {
+						c->bw = borderpx;
+						XSetWindowBorderWidth(dpy, c->win, c->bw);
+						arrange(c->mon);
+						drawbars();
+					}
+				}
+				XFree(data);
+			}
+		}
+	}
 	if (ev->atom == XA_WM_HINTS) {
 		XWMHints *wmh = XGetWMHints(dpy, c->win);
 		if (wmh) {
