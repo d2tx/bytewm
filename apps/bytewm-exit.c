@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/wait.h>
 
 static Display *dpy;
 static Window win;
@@ -98,11 +97,17 @@ run_cmd(int idx)
 {
 	XUnmapWindow(dpy, win);
 	XFlush(dpy);
-	if (fork() == 0) {
+	pid_t pid = fork();
+	if (pid < 0)
+		return;
+	if (pid == 0) {
+		/* detach and drop inherited descriptors (incl. X socket) */
+		for (int fd = 3; fd < 1024; fd++)
+			close(fd);
+		setsid();
 		execl("/bin/sh", "sh", "-c", cmds[idx], NULL);
 		_exit(1);
 	}
-	wait(NULL);
 }
 
 int
