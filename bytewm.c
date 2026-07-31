@@ -2513,6 +2513,20 @@ fallback:
 /* signal handlers */
 
 void
+exitlog(const char *why)
+{
+	int fd = open(crash_logpath[0] ? crash_logpath : "/tmp/bytewm_crash.log",
+	              O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW, 0600);
+	if (fd >= 0) {
+		char msg[256];
+		int n = snprintf(msg, sizeof(msg), "exit: %s\n", why);
+		if (n > 0 && (size_t)n < sizeof(msg))
+			write(fd, msg, (size_t)n);
+		close(fd);
+	}
+}
+
+void
 sigsegv(int sig)
 {
 	int fd = open(crash_logpath[0] ? crash_logpath : "/tmp/bytewm_crash.log",
@@ -2816,12 +2830,27 @@ run(void)
 	time_t last_update = 0;
 	XEvent ev;
 	XSync(dpy, False);
+
+	/* status fifo: instant refresh on volume change etc. */
+	int sfifo = open("/tmp/bytewm_status.fifo", O_RDWR | O_NONBLOCK);
+	if (sfifo < 0) {
+		(void)unlink("/tmp/bytewm_status.fifo");
+		if (mkfifo("/tmp/bytewm_status.fifo", 0600) == 0)
+			sfifo = open("/tmp/bytewm_status.fifo", O_RDWR | O_NONBLOCK);
+	}
+
 	while (running) {
 		time_t now = time(NULL);
 		if (!XPending(dpy)) {
-			struct pollfd pfd = { .fd = xfd, .events = POLLIN };
-			if (poll(&pfd, 1, 1000) < 0) {
+			struct pollfd pfd[2] = {
+				{ .fd = xfd, .events = POLLIN },
+				{ .fd = sfifo, .events = POLLIN }
+			};
+			int nfds = 1;
+			if (sfifo >= 0) nfds = 2;
+			if (poll(pfd, nfds, 1000) < 0) {
 				if (errno == EINTR) continue;
+				exitlog("run: poll failed");
 				break;
 			}
 			now = time(NULL);
@@ -2844,11 +2873,21 @@ run(void)
 			case UnmapNotify:      unmapnotify(&ev);      break;
 			}
 		}
+		if (sfifo >= 0) {
+			struct pollfd pf = { .fd = sfifo, .events = POLLIN };
+			if (poll(&pf, 1, 0) > 0) {
+				char drain[256];
+				while (read(sfifo, drain, sizeof(drain)) > 0);
+				updatestatus();
+			}
+		}
 		if (now - last_update >= 2) {
 			last_update = now;
 			updatestatus();
 		}
 	}
+
+	if (sfifo >= 0) close(sfifo);
 }
 
 void
