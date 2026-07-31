@@ -162,7 +162,7 @@ typedef struct Layout {
 } Layout;
 
 /* function prototypes */
-static void applyrules(Client *c);
+static void applyrules(Client *c, int initial);
 static void arrange(Monitor *m);
 static void attach(Client *c);
 static void attachstack(Client *c);
@@ -665,7 +665,7 @@ updatesizehints(Client *c)
 }
 
 void
-applyrules(Client *c)
+applyrules(Client *c, int initial)
 {
 	const char *cls, *inst;
 	XClassHint ch;
@@ -685,7 +685,10 @@ applyrules(Client *c)
 	}
 	if (cls) XFree(ch.res_class);
 	if (inst) XFree(ch.res_name);
-	if (!c->tags) c->tags = selmon->tags;
+	/* only default the tag on first manage: a title change on a
+	   tag-0 client (e.g. the scratchpad) must not yank it onto the
+	   current view */
+	if (initial && !c->tags) c->tags = selmon->tags;
 }
 
 int
@@ -1730,7 +1733,7 @@ manage(Window w, XWindowAttributes *wa)
 	c->isfloating = 0;
 
 	updatesizehints(c);
-	applyrules(c);
+	applyrules(c, 1);
 
 	c->oldtags = c->tags;
 
@@ -1949,7 +1952,10 @@ clientmessage(XEvent *e)
 	if (ev->message_type == netatom[NetActiveWindow]) {
 		c = wintoclient(ev->window);
 		if (c) {
-			if (!(c->tags & c->mon->tags)) {
+			/* only switch the view for a client with real tags:
+			   activating a tag-0 client (scratchpad) must not
+			   blank the view to 0 */
+			if (c->tags && !(c->tags & c->mon->tags)) {
 				c->mon->tags = c->tags;
 				focus(NULL, 0);
 				arrange(c->mon);
@@ -2121,7 +2127,7 @@ propertynotify(XEvent *e)
 	if (ev->atom == netatom[NetWMName]) {
 		unsigned int oldtags = c->tags;
 		int oldfloating = c->isfloating;
-		applyrules(c);
+		applyrules(c, 0);
 		if (c->tags != oldtags || c->isfloating != oldfloating) {
 			setwmdesktop(c);
 			arrange(c->mon);
