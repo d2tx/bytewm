@@ -755,8 +755,15 @@ restack(Monitor *m)
 		for (Client *c = m->stack; c; c = c->snext)
 			if (ISVISIBLE(c, m->tags) && c != m->sel)
 				XConfigureWindow(dpy, c->win, CWSibling|CWStackMode, &wc);
+		/* keep the selected window below the bar unless fullscreen,
+		   so a floating window dragged over the bar doesn't erase it */
+		if (m->sel->isfullscreen)
+			XRaiseWindow(dpy, m->sel->win);
+		else
+			XConfigureWindow(dpy, m->sel->win, CWSibling|CWStackMode, &wc);
+	} else {
+		XRaiseWindow(dpy, m->sel->win);
 	}
-	XRaiseWindow(dpy, m->sel->win);
 }
 
 void
