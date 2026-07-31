@@ -1404,13 +1404,21 @@ focusstack(const Arg *arg)
 			for (c = selmon->clients; c && !ISVISIBLE(c, selmon->tags); c = c->next);
 	} else {
 		/* find last visible before sel, or wrap to last visible overall */
-		for (c = NULL, i = selmon->clients; i && i != selmon->sel; i = i->next)
-			if (ISVISIBLE(i, selmon->tags))
-				c = i;
+		Client *lastvisible = NULL;
+		int past_sel = 0;
+		for (c = NULL, i = selmon->clients; i; i = i->next) {
+			if (!ISVISIBLE(i, selmon->tags)) continue;
+			lastvisible = i;   /* most recent visible (true last at end) */
+			if (i == selmon->sel) {
+				past_sel = 1;
+				continue;
+			}
+			if (!past_sel)
+				c = i;   /* last visible before sel */
+		}
+		/* sel was the first visible client: wrap to the last visible */
 		if (!c)
-			for (i = selmon->sel->next; i; i = i->next)
-				if (ISVISIBLE(i, selmon->tags))
-					c = i;
+			c = lastvisible;
 	}
 	if (c) {
 		focus(c, 1);
