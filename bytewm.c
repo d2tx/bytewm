@@ -2193,7 +2193,9 @@ movemouse(const Arg *arg)
 		switch (ev.type) {
 		case MotionNotify:
 			XQueryPointer(dpy, root, &dummy, &dummy, &nx, &ny, &di, &di, &dui);
-			resize(c, nx + ox, ny + oy, c->w, c->h, 1);
+			/* interact=0: moving must not apply size-increment
+			   rounding, which would resize the window mid-drag */
+			resize(c, nx + ox, ny + oy, c->w, c->h, 0);
 			break;
 		}
 	} while (ev.type != ButtonRelease &&
