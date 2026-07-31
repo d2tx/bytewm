@@ -174,6 +174,7 @@ static void read_games_config(void) {
 			free(game_labels[game_count]);
 			free(game_exe[game_count]);
 			free(game_proton[game_count]);
+			free(game_extra[game_count]);
 			continue;
 		}
 		build_game_command(game_count);
@@ -319,7 +320,9 @@ static void read_config(void) {
 
 static void launch(void) {
 	if (!commands[sel]) return;
-	if (fork() == 0) {
+	pid_t pid = fork();
+	if (pid < 0) return;
+	if (pid == 0) {
 		setsid();
 		execl("/bin/sh", "/bin/sh", "-c", commands[sel], NULL);
 		_exit(1);
@@ -328,7 +331,9 @@ static void launch(void) {
 
 static void launch_game(int idx) {
 	if (idx < 0 || idx >= game_count || !game_commands[idx]) return;
-	if (fork() == 0) {
+	pid_t pid = fork();
+	if (pid < 0) return;
+	if (pid == 0) {
 		setsid();
 		int fd = open("/dev/null", O_RDWR);
 		if (fd >= 0) { dup2(fd, STDOUT_FILENO); dup2(fd, STDERR_FILENO); close(fd); }
@@ -390,7 +395,7 @@ int main(void) {
 	}
 
 	read_games_config();
-	if (game_count > 0) {
+	if (game_count > 0 && count < MAX_ITEMS) {
 		labels[count] = strdup("Games");
 		commands[count] = strdup("__GAMES__");
 		count++;
@@ -547,6 +552,7 @@ int main(void) {
 		free(game_labels[i]);
 		free(game_exe[i]);
 		free(game_proton[i]);
+		free(game_extra[i]);
 	}
 	return 0;
 }
