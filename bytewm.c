@@ -1426,8 +1426,12 @@ zoom(const Arg *arg)
 	(void)arg;
 	Client *c = selmon->sel;
 	if (!c || !ISVISIBLE(c, selmon->tags) || c->isfloating) return;
-	Client *next = c->next;
-	if (!next || !ISVISIBLE(next, selmon->tags)) return;
+	/* first visible tiled client = master position */
+	Client *first = selmon->clients;
+	while (first && (!ISVISIBLE(first, selmon->tags) || first->isfloating))
+		first = first->next;
+	if (!first || first == c) return;
+	/* promote the focused client to master */
 	detach(c);
 	c->next = selmon->clients;
 	selmon->clients = c;
