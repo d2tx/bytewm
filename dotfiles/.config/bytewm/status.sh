@@ -35,14 +35,18 @@ for n in /dev/nvme?n1; do
 done
 
 # Volume
-vol=$(amixer get Master 2>/dev/null | awk -F'[][]' '/%/ {print $2, $4}' | head -1)
+vol=$(amixer get Master 2>/dev/null | awk -F'[][]' '/%/ {print $2, $6}' | head -1)
 [ -z "$vol" ] && vol=""
+case "$vol" in
+	*" off") vol="MUTE" ;;
+	*" on")  vol="${vol% on}" ;;
+esac
 
 datetime=$(date +"%I:%M %p")
 
-printf "CPU %d%% | MEM %s" "$cpu" "${mem_used}/${mem_total}M"
+printf "VOL %s" "${vol:-0%}"
+printf " | CPU %d%% | MEM %s" "$cpu" "${mem_used}/${mem_total}M"
 [ -n "$cputemp" ] && printf " | CPU %d°C" "$cputemp"
 [ -n "$gputemp" ] && printf " | GPU %d°C" "$gputemp"
 [ -n "$nvme" ] && printf " | %s" "$nvme"
-[ -n "$vol" ] && printf " | VOL %s" "$vol"
 printf " | %s" "$datetime"

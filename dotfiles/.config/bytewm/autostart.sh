@@ -13,3 +13,9 @@ pkill bytify 2>/dev/null
 rm -f /tmp/bytify.fifo
 mkfifo /tmp/bytify.fifo
 bytify &
+
+# volume OSD daemon
+pkill bytevol 2>/dev/null
+rm -f /tmp/bytevol.fifo
+mkfifo /tmp/bytevol.fifo
+bytevol &
