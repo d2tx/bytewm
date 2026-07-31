@@ -40,6 +40,7 @@ static void save_ppm(Display *dpy, XImage *img, int w, int h) {
 	char path[512];
 	time_t t = time(NULL);
 	struct tm *tm = localtime(&t);
+	if (!tm) { XDestroyImage(img); return; }
 	if (home) snprintf(path, sizeof(path), "%s/screenshots", home);
 	else snprintf(path, sizeof(path), "/tmp/screenshots");
 	mkdir(path, 0755);
@@ -48,7 +49,7 @@ static void save_ppm(Display *dpy, XImage *img, int w, int h) {
 	char fullpath[1024];
 	snprintf(fullpath, sizeof(fullpath), "%s/%s.ppm", path, filename);
 	FILE *fp = fopen(fullpath, "wb");
-	if (!fp) { fprintf(stderr, "bytesnap: could not write %s\n", fullpath); return; }
+	if (!fp) { fprintf(stderr, "bytesnap: could not write %s\n", fullpath); XDestroyImage(img); return; }
 	fprintf(fp, "P6\n%d %d\n255\n", w, h);
 	int rshift = bitpos(img->red_mask);
 	int gshift = bitpos(img->green_mask);
@@ -331,17 +332,28 @@ static void capture_window(Display *dpy, int screen, Window root) {
 
 	while (!done && XNextEvent(dpy, &ev) >= 0) {
 		if (ev.type == ButtonPress && ev.xbutton.button == Button1) {
-			Window child;
+			/* the overlay is topmost, so hide it before resolving the
+			   window under the cursor */
+			XUnmapWindow(dpy, overlay);
+			XSync(dpy, False);
+			Window rootret = None, childret = None;
 			int wx, wy;
-			XTranslateCoordinates(dpy, overlay, root, ev.xbutton.x, ev.xbutton.y, &wx, &wy, &child);
-			Window target = get_toplevel(dpy, root, child);
+			XQueryPointer(dpy, root, &rootret, &childret,
+				&wx, &wy, &wx, &wy, &ev.xbutton.state);
+			Window target = get_toplevel(dpy, root, childret);
 			if (target && target != root) {
 				XWindowAttributes a;
 				if (XGetWindowAttributes(dpy, target, &a)) {
+					int tx = 0, ty = 0, sx = 0, sy = 0;
 					Window dummy;
-					int tx, ty;
 					XTranslateCoordinates(dpy, target, root, 0, 0, &tx, &ty, &dummy);
-					rx = tx; ry = ty; rw = a.width; rh = a.height;
+					XTranslateCoordinates(dpy, target, root, a.width, a.height, &sx, &sy, &dummy);
+					rx = tx; ry = ty;
+					rw = sx - tx; rh = sy - ty;
+					if (rx < 0) { rw += rx; rx = 0; }
+					if (ry < 0) { rh += ry; ry = 0; }
+					if (rw > sw - rx) rw = sw - rx;
+					if (rh > sh - ry) rh = sh - ry;
 				}
 			}
 			done = 1;
