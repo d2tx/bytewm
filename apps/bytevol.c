@@ -9,8 +9,10 @@
 #include <sys/select.h>
 #include <sys/time.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <time.h>
 #include <math.h>
+#include <sys/stat.h>
 
 static Display *dpy;
 static Window root, win;
@@ -82,6 +84,7 @@ get_volume(void)
 	char line[256];
 	int v = -1;
 	int m = 0;
+	int have_db = 0;
 	double db = 0.0;
 	while (fgets(line, sizeof(line), fp)) {
 		char *p = strstr(line, "[");
@@ -97,19 +100,22 @@ get_volume(void)
 		v = atoi(buf);
 		if (strstr(line, "[off]")) m = 1;
 		char *dbp = strstr(line, "dB]");
-		if (dbp && dbp - 2 >= line) {
+		if (dbp && dbp - line >= 2) {
 			/* [X.XXdB] */
 			char *sp = dbp - 2;
 			while (sp > line && *sp != '[') sp--;
-			if (*sp == '[') db = atof(sp + 1);
+			if (*sp == '[') { db = atof(sp + 1); have_db = 1; }
 		}
 		break;
 	}
 	pclose(fp);
 	if (v < 0) v = 0;
 	if (v > 100) v = 100;
-	(void)v;
-	cur = level_from_db(db);
+	/* prefer dB->level; fall back to raw % if dB unavailable */
+	if (have_db)
+		cur = level_from_db(db);
+	else
+		cur = v;
 	if (level < 0) level = cur;
 	muted = m;
 }
@@ -117,7 +123,8 @@ get_volume(void)
 static void
 write_level_file(void)
 {
-	int fd = open(level_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	int fd = open(level_file,
+		O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW | O_CLOEXEC, 0644);
 	if (fd >= 0) {
 		char buf[16];
 		int n;
@@ -125,8 +132,10 @@ write_level_file(void)
 			n = snprintf(buf, sizeof(buf), "MUTE\n");
 		else
 			n = snprintf(buf, sizeof(buf), "%d\n", level);
-		if (n > 0 && (size_t)n < sizeof(buf))
-			write(fd, buf, (size_t)n);
+		if (n > 0 && (size_t)n < sizeof(buf)) {
+			ssize_t r = write(fd, buf, (size_t)n);
+			(void)r;
+		}
 		close(fd);
 	}
 }
@@ -191,7 +200,12 @@ set_level(int newlevel)
 {
 	if (newlevel < 0) newlevel = 0;
 	if (newlevel > 100) newlevel = 100;
+	cur = newlevel;
 	level = newlevel;
+
+	/* publish intent to the bar immediately (real-time), then apply */
+	muted = 0;
+	write_level_file();
 
 	double target = db_from_level(level);
 	FILE *fp = popen("amixer get Master 2>/dev/null", "r");
@@ -200,7 +214,7 @@ set_level(int newlevel)
 		char line[256];
 		while (fgets(line, sizeof(line), fp)) {
 			char *dbp = strstr(line, "dB]");
-			if (dbp && dbp - 2 >= line) {
+			if (dbp && dbp - line >= 2) {
 				char *sp = dbp - 2;
 				while (sp > line && *sp != '[') sp--;
 				if (*sp == '[') curdb = atof(sp + 1);
@@ -216,9 +230,6 @@ set_level(int newlevel)
 	else if (delta < -0.5)
 		run_cmd("amixer set Master %.1fdB- >/dev/null 2>&1", -delta);
 
-	cur = newlevel;
-	muted = 0;
-	write_level_file();
 	shown_time = time(NULL);
 	draw();
 }
@@ -232,7 +243,6 @@ toggle_mute(void)
 	shown_time = time(NULL);
 	draw();
 }
-
 int
 main(int argc, char *argv[])
 {
@@ -299,13 +309,24 @@ main(int argc, char *argv[])
 	/* daemon mode */
 	fd_set fds;
 	int xfd = ConnectionNumber(dpy);
-	int fd = open(fifo_path, O_RDWR | O_NONBLOCK);
+	int fd = open(fifo_path, O_RDWR | O_NONBLOCK | O_CLOEXEC);
 	if (fd < 0) {
 		XDestroyWindow(dpy, win);
 		XFreeFont(dpy, xfont);
 		XFreeGC(dpy, gc);
 		XCloseDisplay(dpy);
 		return 1;
+	}
+	{
+		struct stat st;
+		if (fstat(fd, &st) == 0 && !S_ISFIFO(st.st_mode)) {
+			close(fd);
+			XDestroyWindow(dpy, win);
+			XFreeFont(dpy, xfont);
+			XFreeGC(dpy, gc);
+			XCloseDisplay(dpy);
+			return 1;
+		}
 	}
 
 	get_volume();
@@ -318,8 +339,10 @@ main(int argc, char *argv[])
 		int nfds = (fd > xfd ? fd : xfd);
 		struct timeval tv = { 1, 0 };
 		int n = select(nfds + 1, &fds, NULL, NULL, &tv);
-		if (n < 0)
+		if (n < 0) {
+			if (errno == EINTR) continue;
 			break;
+		}
 
 		if (FD_ISSET(xfd, &fds)) {
 			while (XPending(dpy)) {
@@ -331,25 +354,38 @@ main(int argc, char *argv[])
 		}
 
 		if (FD_ISSET(fd, &fds)) {
-			/* drain all pending commands, one per line */
-			char cmdbuf[1024];
+			/* persistent line buffer: only \n-terminated tokens
+			   are dispatched; carry leftovers across reads */
+			static char cmdbuf[1024];
+			static size_t cmdlen = 0;
 			ssize_t nrr;
-			while ((nrr = read(fd, cmdbuf, sizeof(cmdbuf) - 1)) > 0) {
-				cmdbuf[nrr] = '\0';
-				char *tok = cmdbuf;
-				while (tok && *tok) {
-					char *nl = strchr(tok, '\n');
-					if (nl) *nl = '\0';
-					if (strstr(tok, "toggle") || strstr(tok, "t"))
-						toggle_mute();
-					else if (strstr(tok, "+"))
-						set_level(cur + STEP);
-					else if (strstr(tok, "-"))
-						set_level(cur - STEP);
-					else if (*tok)
-						show();
+			while ((nrr = read(fd, cmdbuf + cmdlen,
+				sizeof(cmdbuf) - 1 - cmdlen)) > 0) {
+				cmdlen += (size_t)nrr;
+				if (cmdlen >= sizeof(cmdbuf) - 1) {
+					/* oversized unterminated line: drop it */
+					cmdlen = 0;
+					continue;
+				}
+				cmdbuf[cmdlen] = '\0';
+				for (;;) {
+					char *nl = memchr(cmdbuf, '\n', cmdlen);
 					if (!nl) break;
-					tok = nl + 1;
+					size_t toklen = (size_t)(nl - cmdbuf);
+					if (toklen) {
+						cmdbuf[toklen] = '\0';
+						if (!strcmp(cmdbuf, "+"))
+							set_level(cur + STEP);
+						else if (!strcmp(cmdbuf, "-"))
+							set_level(cur - STEP);
+						else if (!strcmp(cmdbuf, "toggle") ||
+						         !strcmp(cmdbuf, "t"))
+							toggle_mute();
+						else if (cmdbuf[0])
+							show();
+					}
+					memmove(cmdbuf, nl + 1, cmdlen - toklen - 1);
+					cmdlen -= toklen + 1;
 				}
 			}
 		}
