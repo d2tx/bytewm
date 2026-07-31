@@ -99,6 +99,10 @@ static void countdown(Display *dpy, Window root, int screen) {
 		XFlush(dpy);
 		sleep(1);
 	}
+	XSetForeground(dpy, cgc, c_bg);
+	XFillRectangle(dpy, cwin, cgc, 0, 0, 80, 60);
+	XFlush(dpy);
+	sleep(1);
 	XDestroyWindow(dpy, cwin);
 	XFreeGC(dpy, cgc);
 	XFreeFont(dpy, cfont);
