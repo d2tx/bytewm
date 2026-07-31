@@ -80,9 +80,10 @@ static void countdown(Display *dpy, Window root, int screen) {
 	if (!cfont) return;
 	unsigned long c_bg = getcol(dpy, "#282828");
 	XSetWindowAttributes cwa = { .override_redirect = True, .background_pixel = c_bg };
-	Window cwin = XCreateWindow(dpy, root, (sw-80)/2, (sh-60)/2, 80, 60, 0,
+	Window cwin = XCreateWindow(dpy, root, (sw-40)/2, (sh-30)/2, 40, 30, 2,
 		DefaultDepth(dpy, screen), CopyFromParent, DefaultVisual(dpy, screen),
 		CWOverrideRedirect | CWBackPixel, &cwa);
+	XSetWindowBorder(dpy, cwin, getcol(dpy, "#689d6a"));
 	GC cgc = XCreateGC(dpy, cwin, 0, NULL);
 	XSetFont(dpy, cgc, cfont->fid);
 	XMapRaised(dpy, cwin);
@@ -91,16 +92,16 @@ static void countdown(Display *dpy, Window root, int screen) {
 	for (int i = 3; i > 0; i--) {
 		char buf[2] = { '0' + i, '\0' };
 		XSetForeground(dpy, cgc, c_bg);
-		XFillRectangle(dpy, cwin, cgc, 0, 0, 80, 60);
+		XFillRectangle(dpy, cwin, cgc, 0, 0, 40, 30);
 		XSetForeground(dpy, cgc, getcol(dpy, cols[3-i]));
 		int tw = XTextWidth(cfont, buf, 1);
 		int th = cfont->ascent + cfont->descent;
-		XDrawString(dpy, cwin, cgc, (80-tw)/2, (60+th)/2, buf, 1);
+		XDrawString(dpy, cwin, cgc, (40-tw)/2, (30+th)/2, buf, 1);
 		XFlush(dpy);
 		sleep(1);
 	}
 	XSetForeground(dpy, cgc, c_bg);
-	XFillRectangle(dpy, cwin, cgc, 0, 0, 80, 60);
+	XFillRectangle(dpy, cwin, cgc, 0, 0, 40, 30);
 	XFlush(dpy);
 	sleep(1);
 	XDestroyWindow(dpy, cwin);
