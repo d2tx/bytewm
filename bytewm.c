@@ -976,6 +976,76 @@ bspnode_destroy(Node *n)
 	free(n);
 }
 
+/* remove a leaf node from the tree, splicing its sibling up */
+static void
+bsp_remove_leaf(Monitor *m, Node *n)
+{
+	Node *parent = n->parent;
+	n->client = NULL;
+	if (parent) {
+		Node *sibling = parent->a == n ? parent->b : parent->a;
+		if (sibling) {
+			sibling->parent = parent->parent;
+			if (parent->a == sibling) parent->a = NULL;
+			else parent->b = NULL;
+		}
+		if (sibling) {
+			if (parent->parent) {
+				if (parent->parent->a == parent)
+					parent->parent->a = sibling;
+				else
+					parent->parent->b = sibling;
+			} else {
+				m->root = sibling;
+			}
+		} else {
+			if (parent->parent) {
+				if (parent->parent->a == parent)
+					parent->parent->a = NULL;
+				else
+					parent->parent->b = NULL;
+			} else {
+				m->root = NULL;
+			}
+		}
+		bspnode_destroy(parent);
+	} else {
+		if (m->root == n) m->root = NULL;
+		bspnode_destroy(n);
+	}
+}
+
+/* find a leaf in the tree whose client is c */
+static Node *
+bsp_find_leaf(Node *n, Client *c)
+{
+	if (!n) return NULL;
+	if (n->isleaf)
+		return n->client == c ? n : NULL;
+	Node *r = bsp_find_leaf(n->a, c);
+	if (r) return r;
+	return bsp_find_leaf(n->b, c);
+}
+
+/* remove a client's leaf from a monitor's BSP tree, whatever the
+   layout (on non-bsp layouts arrange() won't rebuild the tree) */
+static void
+bsp_remove_client(Monitor *m, Client *c)
+{
+	Node *n;
+	if (c->node) {
+		n = c->node;
+		c->node = NULL;
+		bsp_remove_leaf(m, n);
+	} else if (m->root) {
+		n = bsp_find_leaf(m->root, c);
+		if (n) {
+			c->node = NULL;
+			bsp_remove_leaf(m, n);
+		}
+	}
+}
+
 /* ---- bar ---- */
 
 unsigned int
@@ -1607,7 +1677,10 @@ tagmon(const Arg *arg)
 	Monitor *m = dirtomon(arg->i);
 	if (m) {
 		Client *c = selmon->sel;
-		c->node = NULL;  /* arrange() will rebuild the BSP tree */
+		/* remove from the source monitor's BSP tree so no stale
+		   leaf keeps pointing at c after it moves (and possibly
+		   gets closed while another layout is active) */
+		bsp_remove_client(selmon, c);
 		detach(c);
 		detachstack(c);
 		c->mon = m;
@@ -1777,44 +1850,8 @@ unmanage(Client *c, int destroyed)
 		free(wins);
 	}
 
-	/* remove from bsp tree */
-	if (c->node) {
-		Node *n = c->node;
-		Node *parent = n->parent;
-		n->client = NULL;
-		if (parent) {
-			Node *sibling = parent->a == n ? parent->b : parent->a;
-			if (sibling) {
-				sibling->parent = parent->parent;
-				if (parent->a == sibling) parent->a = NULL;
-				else parent->b = NULL;
-			}
-			if (sibling) {
-				if (parent->parent) {
-					if (parent->parent->a == parent)
-						parent->parent->a = sibling;
-					else
-						parent->parent->b = sibling;
-				} else {
-					m->root = sibling;
-				}
-			} else {
-				if (parent->parent) {
-					if (parent->parent->a == parent)
-						parent->parent->a = NULL;
-					else
-						parent->parent->b = NULL;
-				} else {
-					m->root = NULL;
-				}
-			}
-			bspnode_destroy(parent);
-		} else {
-			if (m->root == n) m->root = NULL;
-			bspnode_destroy(n);
-		}
-		c->node = NULL;
-	}
+	/* remove from bsp tree (shared leaf-splice logic) */
+	bsp_remove_client(m, c);
 
 	if (!destroyed) {
 		XGrabServer(dpy);
@@ -2829,8 +2866,6 @@ void
 void
 run(void)
 {
-	signal(SIGHUP, sighup);
-
 	int xfd = ConnectionNumber(dpy);
 	time_t last_update = 0;
 	XEvent ev;
@@ -2901,6 +2936,10 @@ cleanup(void)
 	while (mons) {
 		Monitor *m = mons;
 		mons = m->next;
+		/* destroy the BSP tree BEFORE freeing clients: bspnode_destroy
+		   writes n->client->node = NULL through leaf client pointers */
+		if (m->root) bspnode_destroy(m->root);
+		if (m->barwin) XDestroyWindow(dpy, m->barwin);
 		while (m->clients) {
 			Client *c = m->clients;
 			m->clients = c->next;
@@ -2909,8 +2948,6 @@ cleanup(void)
 			XUngrabButton(dpy, AnyButton, AnyModifier, c->win);
 			free(c);
 		}
-		if (m->barwin) XDestroyWindow(dpy, m->barwin);
-		if (m->root) bspnode_destroy(m->root);
 		free(m);
 	}
 	if (xfont_core)
@@ -2972,6 +3009,11 @@ main(int argc, char *argv[])
 
 	signal(SIGSEGV, sigsegv);
 	signal(SIGABRT, sigsegv);
+
+	/* register SIGHUP before setup() so a HUP arriving during
+	   autostart/setup (e.g. spamming the restart keybind) is caught
+	   instead of hitting the default terminate action */
+	signal(SIGHUP, sighup);
 
 	checkotherwm();
 	setup();
