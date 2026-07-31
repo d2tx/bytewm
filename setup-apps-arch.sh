@@ -14,7 +14,6 @@ read -p "Install qutebrowser (vim-like browser)?    [y/N] " qb
 read -p "Install file manager (thunar)?            [y/N] " th
 read -p "Install compositor (picom)?               [y/N] " pc
 read -p "Install PDF viewer (zathura)?             [y/N] " za
-read -p "Install audio mixer GUI (pavucontrol)?     [y/N] " pv
 read -p "Install archive tools (unzip, unrar, p7zip)? [y/N] " ar
 read -p "Install torrent client (rtorrent)?         [y/N] " rt
 echo ""
@@ -29,7 +28,6 @@ echo ""
 [ "$th" = "y" ] || [ "$th" = "Y" ] && install thunar
 [ "$pc" = "y" ] || [ "$pc" = "Y" ] && install picom
 [ "$za" = "y" ] || [ "$za" = "Y" ] && install zathura zathura-pdf-mupdf
-[ "$pv" = "y" ] || [ "$pv" = "Y" ] && install pavucontrol
 [ "$ar" = "y" ] || [ "$ar" = "Y" ] && install unzip unrar p7zip
 [ "$rt" = "y" ] || [ "$rt" = "Y" ] && install rtorrent
 
@@ -80,7 +78,6 @@ echo ""
 [ "$th" = "y" ] || [ "$th" = "Y" ] && echo "  thunar         file manager"
 [ "$pc" = "y" ] || [ "$pc" = "Y" ] && echo "  picom          compositor (transparency / shadows)"
 [ "$za" = "y" ] || [ "$za" = "Y" ] && echo "  zathura        PDF viewer (vim keys)"
-[ "$pv" = "y" ] || [ "$pv" = "Y" ] && echo "  pavucontrol    audio mixer (per-app volume, device switching)"
 [ "$ar" = "y" ] || [ "$ar" = "Y" ] && echo "  archives       unzip, unrar, p7zip"
 [ "$rt" = "y" ] || [ "$rt" = "Y" ] && echo "  rtorrent       torrent client (ncurses)"
 echo "============================================"
