@@ -1192,6 +1192,26 @@ drawbar(Monitor *m)
 		strncpy(buf, status, sizeof(buf) - 1);
 		buf[sizeof(buf) - 1] = '\0';
 
+		/* count segments */
+		int sepw = textwidth(" | ");
+		int nseg = 0;
+		{
+			char *q = buf;
+			while (*q) {
+				char *s = strstr(q, " | ");
+				nseg++;
+				if (!s) break;
+				q = s + 3;
+			}
+		}
+
+		/* single module: no time placeholder, render it right-aligned */
+		if (nseg == 1) {
+			int tw = textwidth(buf);
+			int pos = w - tw - 4 - 6;
+			if (pos < rx) pos = rx;
+			drawtext(pmap, pos, 0, &xft_normfg, normbg, buf, tw + 4);
+		} else {
 		/* find last segment (time) */
 		char *last_seg = NULL;
 		{
@@ -1219,8 +1239,7 @@ drawbar(Monitor *m)
 		}
 
 		/* right-side modules: render all segments with separators */
-		int sepw = textwidth(" | ");
-		int right_total = 0, nseg = 0;
+		int right_total = 0;
 		{
 			char *q = buf;
 			while (*q) {
@@ -1230,7 +1249,6 @@ drawbar(Monitor *m)
 				right_total += textwidth(q) + 4;
 				if (s) right_total += sepw;
 				q[len] = sv;
-				nseg++;
 				if (!s) break;
 				q = s + 3;
 			}
@@ -1273,6 +1291,7 @@ drawbar(Monitor *m)
 				pos += sepw;
 			}
 			p = sep + 3;
+		}
 		}
 	}
 
