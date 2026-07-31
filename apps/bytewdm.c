@@ -37,6 +37,7 @@ static int failed, failed_count;
 
 static pid_t xpid;
 static pam_handle_t *pamh_global;
+static char authfile[512];
 
 #define MAX_SESSIONS 16
 static char *session_names[MAX_SESSIONS];
@@ -118,7 +119,11 @@ static void
 reap_children(int unused)
 {
 	(void)unused;
-	while (waitpid(-1, NULL, WNOHANG) > 0);
+	pid_t p;
+	while ((p = waitpid(-1, NULL, WNOHANG)) > 0) {
+		if (xpid > 0 && p == xpid)
+			xpid = 0;   /* X server exited; don't reuse stale pid */
+	}
 }
 
 static unsigned long
@@ -187,7 +192,7 @@ redraw(void)
 
 	/* session selector */
 	snprintf(line, sizeof line, "[ %s ] (Tab to change)",
-		session_names[session_idx]);
+		n_sessions > 0 ? session_names[session_idx] : "bytewm");
 	XSetForeground(dpy, gc, dimcol);
 	XDrawString(dpy, win, gc, (sw - textw(line)) / 2, y, line, strlen(line));
 
@@ -243,6 +248,10 @@ struct pam_data {
 	const char *pass;
 };
 
+/* appdata must outlive authenticate(): PAM may call back later */
+static struct pam_data pam_pd;
+static struct pam_conv pam_conv;
+
 static int
 pam_conv_cb(int num, const struct pam_message **msg,
             struct pam_response **resp, void *appdata)
@@ -275,11 +284,13 @@ pam_conv_cb(int num, const struct pam_message **msg,
 static int
 authenticate(void)
 {
-	struct pam_data pd = { username, password };
-	struct pam_conv conv = { pam_conv_cb, &pd };
+	pam_pd.user = username;
+	pam_pd.pass = password;
+	pam_conv.conv = pam_conv_cb;
+	pam_conv.appdata_ptr = &pam_pd;
 	pam_handle_t *pamh = NULL;
 	int ret;
-	ret = pam_start("bytewdm", username, &conv, &pamh);
+	ret = pam_start("bytewdm", username, &pam_conv, &pamh);
 	if (ret != PAM_SUCCESS) return 0;
 	ret = pam_authenticate(pamh, 0);
 	if (ret != PAM_SUCCESS) { pam_end(pamh, ret); return 0; }
@@ -288,7 +299,12 @@ authenticate(void)
 	ret = pam_setcred(pamh, PAM_ESTABLISH_CRED);
 	if (ret != PAM_SUCCESS) { pam_end(pamh, ret); return 0; }
 	ret = pam_open_session(pamh, 0);
-	if (ret != PAM_SUCCESS) { pam_end(pamh, ret); return 0; }
+	if (ret != PAM_SUCCESS) {
+		/* don't leave established credentials behind */
+		pam_setcred(pamh, PAM_DELETE_CRED);
+		pam_end(pamh, ret);
+		return 0;
+	}
 	pamh_global = pamh;
 	return 1;
 }
@@ -306,9 +322,59 @@ close_session(void)
 
 /* --- X server --- */
 static void
+make_auth_file(void)
+{
+	char cookie[64];
+	char tmp[1024];
+	FILE *f;
+
+	snprintf(authfile, sizeof authfile, "/tmp/bytewdm-xauth-%d",
+	         (int)getpid());
+
+	/* generate a random cookie */
+	f = popen("mcookie", "r");
+	if (!f) return;
+	if (!fgets(cookie, sizeof cookie, f)) {
+		pclose(f);
+		return;
+	}
+	pclose(f);
+	cookie[strcspn(cookie, "\r\n")] = '\0';
+
+	snprintf(tmp, sizeof tmp,
+		"xauth -f '%s' add %s . %s 2>/dev/null",
+		authfile, display_str, cookie);
+	if (system(tmp) != 0)
+		return;
+	chmod(authfile, 0600);
+
+	/* tell Xlib which auth file to use for the greeter connection */
+	setenv("XAUTHORITY", authfile, 1);
+}
+
+/* give the logged-in user a readable copy of the cookie so the
+   session can connect to the authorized X server */
+static void
+grant_user_auth(struct passwd *pw)
+{
+	char tmp[1024];
+	snprintf(tmp, sizeof tmp,
+		"xauth -f '%s' -b extract %s/.Xauthority %s 2>/dev/null",
+		authfile, pw->pw_dir, display_str);
+	if (system(tmp) == 0) {
+		char ch[1024];
+		snprintf(ch, sizeof ch, "chown %s:%s %s/.Xauthority 2>/dev/null",
+			pw->pw_name, pw->pw_name, pw->pw_dir);
+		system(ch);
+	}
+}
+
+static void
 startx(void)
 {
 	snprintf(display_str, sizeof display_str, ":%d", display_num);
+
+	make_auth_file();
 
 	xpid = fork();
 	if (xpid == 0) {
@@ -318,9 +384,9 @@ startx(void)
 		if (open("/dev/null", O_WRONLY) < 0) _exit(1);
 		setsid();
 		execl("/usr/bin/X", "X", display_str, "-keeptty", "-novtswitch",
-		      "-logfile", "/dev/null", NULL);
+		      "-auth", authfile, "-logfile", "/dev/null", NULL);
 		execl("/usr/bin/Xorg", "Xorg", display_str, "-keeptty", "-novtswitch",
-		      "-logfile", "/dev/null", NULL);
+		      "-auth", authfile, "-logfile", "/dev/null", NULL);
 		_exit(1);
 	}
 	if (xpid < 0) {
@@ -347,7 +413,6 @@ stopx(void)
 		xpid = 0;
 	}
 }
-
 /* --- greeter window --- */
 static void
 creategreeter(void)
@@ -383,6 +448,22 @@ creategreeter(void)
 		CWOverrideRedirect | CWBackPixel | CWEventMask, &wa);
 	XMapWindow(dpy, win);
 	XRaiseWindow(dpy, win);
+	XSync(dpy, 0);
+	/* grab keyboard so a password can't be sniffed by another client */
+	{
+		int grabbed = 0;
+		for (int tries = 0; tries < 100; tries++) {
+			if (XGrabKeyboard(dpy, win, True,
+				GrabModeAsync, GrabModeAsync,
+				CurrentTime) == GrabSuccess) {
+				grabbed = 1;
+				break;
+			}
+			usleep(20000);
+		}
+		if (!grabbed)
+			fprintf(stderr, "bytewdm: keyboard grab failed\n");
+	}
 	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
 	cur = XCreateFontCursor(dpy, XC_xterm);
 	XDefineCursor(dpy, win, cur);
@@ -404,21 +485,43 @@ static void
 runsession(void)
 {
 	struct passwd *pw = getpwnam(username);
-	if (!pw) return;
+	if (!pw) {
+		fprintf(stderr, "bytewdm: unknown user '%s'\n", username);
+		failed = 1;
+		failed_count++;
+		destroygreeter();
+		stopx();
+		return;
+	}
 
 	destroygreeter();
+	grant_user_auth(pw);
 
 	pid_t child = fork();
+	if (child < 0) {
+		fprintf(stderr, "bytewdm: fork failed\n");
+		stopx();
+		return;
+	}
 	if (child == 0) {
 		close(0); close(1); close(2);
 		if (open("/dev/null", O_RDONLY) < 0) _exit(1);
 		if (open("/dev/null", O_WRONLY) < 0) _exit(1);
 		if (open("/dev/null", O_WRONLY) < 0) _exit(1);
+		for (int fd = 3; fd < 1024; fd++)
+			close(fd);
 		setsid();
 
 		clearenv();
 		setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);
 		setenv("DISPLAY", display_str, 1);
+		{
+			/* point at the user's own Xauthority (written before
+			   dropping privileges in runsession via grant_user_auth) */
+			char ua[512];
+			snprintf(ua, sizeof ua, "%s/.Xauthority", pw->pw_dir);
+			setenv("XAUTHORITY", ua, 1);
+		}
 		setenv("HOME", pw->pw_dir, 1);
 		setenv("USER", pw->pw_name, 1);
 		setenv("LOGNAME", pw->pw_name, 1);
@@ -487,10 +590,16 @@ main(void)
 				} else {
 					if (authenticate()) {
 						failed_count = 0;
+						failed = 0;
 						secure_wipe(password, sizeof(password));
 						plen = 0;
 						runsession();
 						close_session();
+						/* reset greeter to a fresh login state */
+						state = 0;
+						ulen = 0;
+						plen = 0;
+						secure_wipe(username, sizeof(username));
 						startx();
 						creategreeter();
 						redraw();
@@ -523,17 +632,17 @@ main(void)
 				if (state == 1 && plen > 0) password[--plen] = 0;
 				redraw();
 			} else if (ks == XK_Tab || ks == XK_ISO_Left_Tab) {
-				if (state == 0) {
+				if (state == 0 && n_sessions > 0) {
 					session_idx = (session_idx + 1) % n_sessions;
 					redraw();
 				}
 			} else if (ks == XK_Left) {
-				if (state == 0) {
+				if (state == 0 && n_sessions > 0) {
 					session_idx = (session_idx - 1 + n_sessions) % n_sessions;
 					redraw();
 				}
 			} else if (ks == XK_Right) {
-				if (state == 0) {
+				if (state == 0 && n_sessions > 0) {
 					session_idx = (session_idx + 1) % n_sessions;
 					redraw();
 				}
