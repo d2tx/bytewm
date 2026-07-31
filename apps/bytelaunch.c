@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -75,6 +76,7 @@ scan_path(void)
 
 	if (!path) path = "/usr/local/bin:/usr/bin:/bin";
 	cpy = strdup(path);
+	if (!cpy) return;
 	for (dir = strtok_r(cpy, ":", &save); dir; dir = strtok_r(NULL, ":", &save)) {
 		d = opendir(dir);
 		if (!d) continue;
@@ -168,7 +170,9 @@ draw(void)
 static void
 run_cmd(const char *cmd)
 {
-	if (!fork()) {
+	pid_t pid = fork();
+	if (pid < 0) return;
+	if (pid == 0) {
 		if (dpy) close(ConnectionNumber(dpy));
 		setsid();
 		execlp(cmd, cmd, NULL);
@@ -176,70 +180,28 @@ run_cmd(const char *cmd)
 	}
 }
 
-static char lockpath[256];
-static int lockacquired;
-
-static void
-cleanup_lock(void)
-{
-	if (lockacquired) {
-		char pidfile[512];
-		snprintf(pidfile, sizeof(pidfile), "%s/pid", lockpath);
-		unlink(pidfile);
-		rmdir(lockpath);
-		lockacquired = 0;
-	}
-}
+static int lockfd = -1;
 
 static void
 sigcleanup(int unused)
 {
 	(void)unused;
-	cleanup_lock();
 	_exit(1);
 }
 
 int
 main(void)
 {
-	snprintf(lockpath, sizeof(lockpath), "/tmp/bytelaunch-%u.lock",
+	/* single-instance lock: flock releases automatically on exit,
+	   no stale-lock cleanup or signal-handler races */
+	char lockfile[256];
+	snprintf(lockfile, sizeof(lockfile), "/tmp/bytelaunch-%u.lock",
 	         (unsigned int)getuid());
-	if (mkdir(lockpath, 0700) != 0) {
-		if (errno == EEXIST) {
-			char pidfile[512];
-			snprintf(pidfile, sizeof(pidfile), "%s/pid", lockpath);
-			FILE *pf = fopen(pidfile, "r");
-			if (pf) {
-				pid_t oldpid = 0;
-				if (fscanf(pf, "%d", &oldpid) == 1 && oldpid > 0
-				    && kill(oldpid, 0) != 0 && errno == ESRCH) {
-					fclose(pf);
-					unlink(pidfile);
-					rmdir(lockpath);
-					if (mkdir(lockpath, 0700) != 0)
-						return 0;
-				} else {
-					fclose(pf);
-					return 0;
-				}
-			} else {
-				return 0;
-			}
-		} else {
-			return 0;
-		}
-	}
-	lockacquired = 1;
-	{
-		char pidfile[512];
-		snprintf(pidfile, sizeof(pidfile), "%s/pid", lockpath);
-		FILE *pf = fopen(pidfile, "w");
-		if (pf) {
-			fprintf(pf, "%d\n", (int)getpid());
-			fclose(pf);
-		}
-	}
-	atexit(cleanup_lock);
+	lockfd = open(lockfile, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+	if (lockfd < 0)
+		return 0;
+	if (flock(lockfd, LOCK_EX | LOCK_NB) != 0)
+		return 0;
 	signal(SIGTERM, sigcleanup);
 	signal(SIGINT, sigcleanup);
 	signal(SIGHUP, sigcleanup);
