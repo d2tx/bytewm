@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/select.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <time.h>
 
 static Display *dpy;
@@ -67,6 +68,10 @@ draw(void)
 			const char *start = p;
 			while (*p && *p != ' ') p++;
 			int wlen = (int)(p - start);
+			/* clamp word to remaining room in line (byte bound) */
+			if (wlen > (int)(LINE_MAX - 1) - (int)linelen - (linelen ? 1 : 0))
+				wlen = (int)(LINE_MAX - 1) - (int)linelen - (linelen ? 1 : 0);
+			if (wlen < 0) wlen = 0;
 			int ww = XTextWidth(xfont, start, wlen);
 			int sepw = linelen ? XTextWidth(xfont, " ", 1) : 0;
 			if (linelen && (int)linelen + sepw + ww > maxpx) {
@@ -100,6 +105,8 @@ draw(void)
 				l[strlen(l) - 1] = '\0';
 				lw = XTextWidth(xfont, l, strlen(l));
 			}
+			if (strlen(l) > (size_t)(LINE_MAX - 4))
+				l[LINE_MAX - 4] = '\0';
 			strcat(l, "...");
 		}
 	}
@@ -166,10 +173,11 @@ main(void)
 		CWOverrideRedirect|CWBackPixel|CWEventMask, &wa);
 	XStoreName(dpy, win, "bytify");
 
-	char buf[512];
+	char buf[1024];
+	size_t buflen = 0;
 	fd_set fds;
 	int xfd = ConnectionNumber(dpy);
-	int fd = open(fifo_path, O_RDWR);
+	int fd = open(fifo_path, O_RDWR | O_NONBLOCK | O_CLOEXEC);
 	if (fd < 0)
 		return 1;
 
@@ -180,8 +188,10 @@ main(void)
 		int nfds = (fd > xfd ? fd : xfd);
 		struct timeval tv = { 1, 0 };
 		int n = select(nfds + 1, &fds, NULL, NULL, &tv);
-		if (n < 0)
+		if (n < 0) {
+			if (errno == EINTR) continue;
 			break;
+		}
 
 		if (FD_ISSET(xfd, &fds)) {
 			while (XPending(dpy)) {
@@ -193,12 +203,23 @@ main(void)
 		}
 
 		if (FD_ISSET(fd, &fds)) {
-			ssize_t nr = read(fd, buf, sizeof(buf) - 1);
-			if (nr > 0) {
-				buf[nr] = '\0';
-				char *nl = strchr(buf, '\n');
-				if (nl) *nl = '\0';
-				if (buf[0]) notify(buf);
+			for (;;) {
+				ssize_t nr = read(fd, buf + buflen, sizeof(buf) - 1 - buflen);
+				if (nr <= 0) break;
+				buflen += (size_t)nr;
+				if (buflen >= sizeof(buf) - 1) {
+					/* drop oversized message */
+					buflen = 0;
+					continue;
+				}
+				for (;;) {
+					char *nl = memchr(buf, '\n', buflen);
+					if (!nl) break;
+					*nl = '\0';
+					if (buf[0]) notify(buf);
+					buflen -= (size_t)(nl + 1 - buf);
+					memmove(buf, nl + 1, buflen);
+				}
 			}
 		}
 

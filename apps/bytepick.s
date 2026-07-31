@@ -24,6 +24,7 @@ str_sp:          .asciz  "  "
 
 clr_aqua:        .ascii  "\033[38;5;108m"
 clr_reset_nl:    .asciz  "\033[0m\n"
+nl_byte:         .byte   10
 
 .equ CLR_AQUA_LEN,  11
 
@@ -409,6 +410,12 @@ got_click:
     movq    $7, %rdx               # "#RRGGBB"
     movq    $1, %rax
     syscall
+    movq    %rdi, %r15
+    movq    $1, %rax
+    leaq    nl_byte(%rip), %rsi
+    movq    $1, %rdx
+    syscall
+    movq    %r15, %rdi
     movq    $3, %rax
     syscall
 1:

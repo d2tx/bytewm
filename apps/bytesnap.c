@@ -32,7 +32,7 @@ static int bitpos(unsigned long mask) {
 
 static void notify(void) {
 	int fd = open("/tmp/bytify.fifo", O_WRONLY | O_NONBLOCK);
-	if (fd >= 0) { dprintf(fd, "screenshot saved"); close(fd); }
+	if (fd >= 0) { dprintf(fd, "screenshot saved\n"); close(fd); }
 }
 
 static void save_ppm(Display *dpy, XImage *img, int w, int h) {
