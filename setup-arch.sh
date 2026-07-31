@@ -22,6 +22,44 @@ sudo pacman -S --needed --noconfirm \
   feh xorg-xrdb xorg-fonts-misc pam git ttf-dejavu terminus-font \
   smartmontools bat fish neovim ranger
 
+echo "==> Adding user to audio group (for ALSA access)..."
+sudo usermod -aG audio "$USER"
+echo "     done (re-login needed)"
+
+echo "==> ALSA direct audio (bit-perfect)"
+cards=$(aplay -l 2>/dev/null | sed -nE 's/^card ([0-9]+): ([^[]+).*/\1|\2/p' | awk '!seen[$1]++' | sed -E 's/[[:space:]]+$//')
+if [ -z "$cards" ]; then
+  echo "WARNING: no audio card found — skipping audio setup"
+else
+  n=$(printf '%s\n' "$cards" | wc -l)
+  if [ "$n" -eq 1 ]; then
+    idx=${cards%%|*}
+    name=${cards#*|}
+  else
+    echo "  Detected audio cards:"
+    printf '%s\n' "$cards" | sed -E 's/^([0-9]+)\|/    card \1: /'
+    read -p "  Enter card number [0] " idx
+    [ -z "$idx" ] && idx=0
+    name=$(printf '%s\n' "$cards" | sed -nE "s/^$idx\|(.*)$/\1/p")
+    [ -z "$name" ] && name=$idx
+  fi
+  echo "  Setting default audio card: $name"
+  sudo tee /etc/asound.conf >/dev/null <<EOF
+# default audio device -> ALSA direct (bit-perfect), no server
+pcm.!default {
+    type hw
+    card "$name"
+}
+ctl.!default {
+    type hw
+    card "$name"
+}
+EOF
+  amixer -c "$idx" set Master 100% >/dev/null 2>&1 || true
+  amixer -c "$idx" set PCM 100% >/dev/null 2>&1 || true
+  sudo alsactl store 2>/dev/null || true
+fi
+
 echo "==> Installing oh-my-fish..."
 if ! fish -c 'omf version' 2>/dev/null; then
   git clone --depth 1 https://github.com/oh-my-fish/oh-my-fish "$HOME/.local/share/omf" 2>/dev/null

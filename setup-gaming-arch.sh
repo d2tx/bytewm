@@ -21,7 +21,6 @@ read -p "Install 32-bit libraries?        [y/N] " m32
 read -p "Install Wine + Winetricks?       [y/N] " wine
 read -p "Install umu-launcher (Proton runner)? [y/N] " um
 read -p "Install Steam/Lutris/MangoHud?   [y/N] " st
-read -p "Install PipeWire audio?          [y/N] " pw
 read -p "Install gamepad support?         [y/N] " gp
 read -p "Build asusctl from source?       [y/N] " ac
 echo ""
@@ -61,13 +60,6 @@ fi
 if [ "$st" = "y" ] || [ "$st" = "Y" ]; then
   echo "==> Steam + Lutris + MangoHud + GameMode"
   install gamemode lib32-gamemode mangohud lib32-mangohud steam lutris
-fi
-
-# ── Audio ────────────────────────────────────────────────
-if [ "$pw" = "y" ] || [ "$pw" = "Y" ]; then
-  echo "==> PipeWire audio"
-  install pipewire wireplumber pipewire-pulse pipewire-alsa
-  systemctl --user enable --now pipewire pipewire-pulse wireplumber || true
 fi
 
 # ── Gamepad ──────────────────────────────────────────────
