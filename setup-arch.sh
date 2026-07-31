@@ -55,8 +55,8 @@ ctl.!default {
     card "$name"
 }
 EOF
-  amixer -c "$idx" set Master 100% >/dev/null 2>&1 || true
-  amixer -c "$idx" set PCM 100% >/dev/null 2>&1 || true
+  amixer -c "$idx" set Master 100% unmute >/dev/null 2>&1 || true
+  amixer -c "$idx" set PCM 100% unmute >/dev/null 2>&1 || true
   sudo alsactl store 2>/dev/null || true
 fi
 

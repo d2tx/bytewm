@@ -1194,8 +1194,10 @@ drawbar(Monitor *m)
 			pos += tw + 2;
 			p[seg_len] = saved;
 			if (!sep) break;
-			drawtext(pmap, pos, 0, &xft_date, normbg, " | ", sepw);
-			pos += sepw;
+			if (sep + 3 != last_seg) {
+				drawtext(pmap, pos, 0, &xft_date, normbg, " | ", sepw);
+				pos += sepw;
+			}
 			p = sep + 3;
 		}
 	}
@@ -2751,7 +2753,7 @@ void
 		XftColorAllocName(dpy, vis, cmap,
 			"#689d6a", &xft_seltag);
 		XftColorAllocName(dpy, vis, cmap,
-			"#83a598", &xft_vol);
+			"#fe8019", &xft_vol);
 		XftColorAllocName(dpy, vis, cmap,
 			"#a89984", &xft_date);
 	}
