@@ -359,7 +359,8 @@ void
 checkotherwm(void)
 {
 	xerrorxlib = XSetErrorHandler(xerrorstart);
-	XSelectInput(dpy, root, SubstructureRedirectMask);
+	XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask |
+		StructureNotifyMask);
 	XSync(dpy, 0);
 	XSetErrorHandler(xerrordummy);
 }
@@ -2393,16 +2394,28 @@ updategeom(void)
 		}
 	}
 
-	/* reassign clients */
-	for (Client *c = allclients; c; ) {
-		Client *next = c->next;
-		c->next = NULL;
-		c->snext = NULL;
-		c->node = NULL;
-		c->mon = selmon;
-		attach(c);
-		attachstack(c);
-		c = next;
+	/* reassign clients. attach()/attachstack() prepend, so reverse
+	   allclients first to preserve the original client/stack order
+	   across a geometry change (otherwise master/focusstack order
+	   flips every time updategeom runs) */
+	{
+		Client *rev = NULL, *c = allclients;
+		while (c) {
+			Client *next = c->next;
+			c->next = rev;
+			rev = c;
+			c = next;
+		}
+		for (c = rev; c; ) {
+			Client *next = c->next;
+			c->next = NULL;
+			c->snext = NULL;
+			c->node = NULL;
+			c->mon = selmon;
+			attach(c);
+			attachstack(c);
+			c = next;
+		}
 	}
 
 	for (Client *t = selmon->stack; t; t = t->snext)
@@ -2410,6 +2423,13 @@ updategeom(void)
 			selmon->sel = t;
 			break;
 		}
+
+	/* sync X input focus / border with the reassigned selection.
+	   raise=0: avoid restacking before arrange() re-lays out windows */
+	if (selmon->sel)
+		focus(selmon->sel, 0);
+	else
+		focus(NULL, 0);
 
 	updatebars();
 	for (Monitor *m = mons; m; m = m->next)
