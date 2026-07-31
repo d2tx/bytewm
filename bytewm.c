@@ -1228,7 +1228,7 @@ drawbar(Monitor *m)
 			time_t t = time(NULL);
 			struct tm *tm = localtime(&t);
 			char timebuf[32], datebuf[32];
-			strftime(datebuf, sizeof(datebuf), "%Y-%m-%d", tm);
+			strftime(datebuf, sizeof(datebuf), "%A, %B %d, %Y", tm);
 			strftime(timebuf, sizeof(timebuf), "%I:%M %p", tm);
 
 			char *centext = showdate ? datebuf : timebuf;
@@ -1937,9 +1937,37 @@ buttonpress(XEvent *e)
 				return;
 			}
 		}
-		/* click on right side (status area) — toggle time/date */
-		showdate = !showdate;
-		drawbar(m);
+		/* toggle time/date only when clicking the centered clock */
+		if (status[0]) {
+			/* mirror drawbar's rx: tags + layout symbol + title */
+			int rx = x;
+			rx += textwidth(m->lt[m->layout]->name) + 6 + 4;
+			if (m->sel) {
+				char winname[256];
+				if (gettextprop(m->sel->win, netatom[NetWMName], winname,
+				    sizeof(winname)))
+					rx += 140;
+			}
+			char buf[512];
+			strncpy(buf, status, sizeof(buf) - 1);
+			buf[sizeof(buf) - 1] = '\0';
+			/* only the multi-segment layout draws a center clock */
+			if (strstr(buf, " | ")) {
+				time_t t = time(NULL);
+				struct tm *tm = localtime(&t);
+				char timebuf[32], datebuf[32];
+				strftime(datebuf, sizeof(datebuf), "%A, %B %d, %Y", tm);
+				strftime(timebuf, sizeof(timebuf), "%I:%M %p", tm);
+				const char *centext = showdate ? datebuf : timebuf;
+				int ctw = textwidth(centext);
+				int cmid = (m->mw - ctw - 4) / 2;
+				if (cmid < rx) cmid = rx;
+				if (ev->x >= cmid && ev->x <= cmid + ctw + 4) {
+					showdate = !showdate;
+					drawbar(m);
+				}
+			}
+		}
 		return;
 	}
 
