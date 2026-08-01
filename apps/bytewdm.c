@@ -535,8 +535,6 @@ runsession(void)
 			setenv("DBUS_SESSION_BUS_ADDRESS", bus, 1);
 		}
 		setenv("XDG_SESSION_TYPE", "x11", 1);
-		setenv("XDG_SESSION_DESKTOP", "bytewm", 1);
-		setenv("XDG_CURRENT_DESKTOP", "bytewm", 1);
 		setenv("XDG_SESSION_CLASS", "user", 1);
 		chdir(pw->pw_dir);
 
