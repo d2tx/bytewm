@@ -377,7 +377,6 @@ static int show_field(const struct submenu *s) {
 	return s->label &&
 	       (!strcmp(s->label, "Softwares") ||
 	        !strcmp(s->label, "Games") ||
-	        !strcmp(s->label, "Emulators") ||
 	        !strcmp(s->label, "Font"));
 }
 
