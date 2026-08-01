@@ -19,7 +19,7 @@ echo "==> bytewm setup for Arch Linux"
 echo "==> Installing packages..."
 sudo pacman -S --needed --noconfirm \
   base-devel libx11 libxft fontconfig freetype2 xorg-server xorg-xinit alsa-utils \
-  feh xorg-xrdb xorg-fonts-misc pam git ttf-dejavu terminus-font \
+  feh xorg-xrdb xorg-xrandr xorg-fonts-misc pam git ttf-dejavu terminus-font \
   smartmontools bat fish neovim ranger
 
 echo "==> Adding user to audio group (for ALSA access)..."
