@@ -29,6 +29,13 @@ echo "==> Adding user to audio group (for ALSA access)..."
 sudo usermod -aG audio "$USER"
 echo "     done (re-login needed)"
 
+echo "==> Passwordless systemctl power actions (for bytewm-exit)..."
+if [ ! -f /etc/sudoers.d/bytewm ]; then
+	echo "%wheel ALL=(ALL) NOPASSWD: /usr/bin/systemctl reboot, /usr/bin/systemctl poweroff, /usr/bin/systemctl suspend" | sudo tee /etc/sudoers.d/bytewm >/dev/null
+	sudo chmod 440 /etc/sudoers.d/bytewm
+fi
+echo "     done"
+
 echo "==> ALSA direct audio (bit-perfect)"
 cards=$(aplay -l 2>/dev/null | sed -nE 's/^card ([0-9]+): ([^[]+).*/\1|\2/p' | awk '!seen[$1]++' | sed -E 's/[[:space:]]+$//')
 if [ -z "$cards" ]; then

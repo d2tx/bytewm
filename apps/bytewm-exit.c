@@ -19,14 +19,15 @@ static AppFont *afont;
 static int sw, sh, win_h, itemh;
 static int selected = 0;
 
-static const char *items[] = { "Lock", "Logout", "Restart", "Shutdown" };
+static const char *items[] = { "Lock", "Logout", "Suspend", "Restart", "Shutdown" };
 static const char *cmds[] = {
 	"bytelock",
 	"pkill -x -u \"$USER\" bytewm",
-	"st -e sh -c \"sudo systemctl reboot\"",
-	"st -e sh -c \"sudo systemctl poweroff\""
+	"sudo -n systemctl suspend",
+	"sudo -n systemctl reboot",
+	"sudo -n systemctl poweroff"
 };
-static int nitems = 4;
+static int nitems = 5;
 
 static unsigned long
 getcol(const char *c)
