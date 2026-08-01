@@ -74,7 +74,6 @@ echo "==> Installing oh-my-fish..."
 if ! fish -c 'omf version' 2>/dev/null; then
   git clone --depth 1 https://github.com/oh-my-fish/oh-my-fish "$HOME/.local/share/omf" 2>/dev/null
 fi
-fish -c 'source "$HOME/.local/share/omf/init.fish"; omf install bobthefish' 2>/dev/null || true
 
 echo "==> Setting fish as default shell..."
 sudo chsh -s /usr/bin/fish "$USER" 2>/dev/null || true
