@@ -55,10 +55,10 @@ else
   fi
   echo "  Setting default audio card: $name"
   sudo tee /etc/asound.conf >/dev/null <<EOF
-# default audio device -> ALSA direct (bit-perfect), no server
+# default audio device -> ALSA plug+dmix (format conversion + mixing)
 pcm.!default {
-    type hw
-    card "$name"
+    type plug
+    slave.pcm "dmix"
 }
 ctl.!default {
     type hw
@@ -85,6 +85,7 @@ ranger --copy-config=all 2>/dev/null || true
 echo "==> Restoring dotfiles..."
 cp -a dotfiles/.bashrc dotfiles/.bash_profile dotfiles/.bash_logout "$HOME/" 2>/dev/null || true
 cp -a dotfiles/.xinitrc dotfiles/.fehbg "$HOME/" 2>/dev/null || true
+cp -a dotfiles/.asoundrc "$HOME/" 2>/dev/null || true
 cp -a dotfiles/.config/fish "$HOME/.config/" 2>/dev/null || true
 cp -a dotfiles/.config/ranger "$HOME/.config/" 2>/dev/null || true
 cp -a dotfiles/.config/opencode "$HOME/.config/" 2>/dev/null || true
