@@ -67,6 +67,7 @@ struct catdef {
 static const struct catdef catdefs[] = {
 	{ "Softwares", "s o f t w a r e s", "softwares.conf", 0 },
 	{ "Games",     "g a m e s",         "games.conf",     1 },
+	{ "Emulators", "e m u l a t o r s",  "emulators.conf", 0 },
 	{ "Settings",  "s e t t i n g s",   "settings.conf",  0 },
 };
 
@@ -376,6 +377,7 @@ static int show_field(const struct submenu *s) {
 	return s->label &&
 	       (!strcmp(s->label, "Softwares") ||
 	        !strcmp(s->label, "Games") ||
+	        !strcmp(s->label, "Emulators") ||
 	        !strcmp(s->label, "Font"));
 }
 
