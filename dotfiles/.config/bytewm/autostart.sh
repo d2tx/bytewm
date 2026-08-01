@@ -1,6 +1,9 @@
 #!/bin/sh
 # bytewm autostart
 
+# load saved Xresources (st.font, st colors) into the X server
+xrdb -merge "$HOME/.Xresources" 2>/dev/null
+
 # reapply saved resolution + refresh rate
 if [ -f ~/.config/bytewm/resolution ]; then
 	read resmode resrate < ~/.config/bytewm/resolution
