@@ -374,10 +374,7 @@ static void draw(void);
 
 /* the search field only makes sense on long, searchable lists */
 static int show_field(const struct submenu *s) {
-	return s->label &&
-	       (!strcmp(s->label, "Softwares") ||
-	        !strcmp(s->label, "Games") ||
-	        !strcmp(s->label, "Font"));
+	return s->label && !strcmp(s->label, "Font");
 }
 
 /* truncate label to maxw pixels, appending "..." if needed */
