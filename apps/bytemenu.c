@@ -16,10 +16,8 @@
 #define MAX_CATS     8
 #define MAX_SUBITEMS 256
 #define MAX_NAV      16
-#define PER_PAGE     6
-#define ITEM_H       30
-#define PAPER_W      288
-#define PAPER_H      360
+#define PAPER_W      432
+#define PAPER_H      540
 #define BORDER_W     2
 
 static Display *dpy;
@@ -27,6 +25,7 @@ static Window root, win;
 static GC gc;
 static AppFont *afont;
 static int sw, sh, win_h;
+static int itemh, per_page;
 static unsigned long c_bg, c_fg, c_hi, c_border, c_dim;
 static XftColor fc_fg, fc_hi, fc_dim;
 
@@ -140,7 +139,7 @@ static void recompute_filter(struct submenu *s) {
 			if (contains_ci(s->labels[i], s->filter))
 				s->fmap[s->fmatch++] = i;
 	}
-	s->page_max = s->fmatch > PER_PAGE ? (s->fmatch - 1) / PER_PAGE : 0;
+	s->page_max = s->fmatch > per_page ? (s->fmatch - 1) / per_page : 0;
 }
 
 static void build_game_command(int idx) {
@@ -214,6 +213,12 @@ static void parse_items(struct submenu *s, FILE *f) {
 		char *p = strchr(line, '|');
 		if (!p) continue;
 		*p++ = 0;
+		/* trim trailing whitespace from the label */
+		{
+			size_t llen = strlen(line);
+			while (llen > 0 && (line[llen-1] == ' ' || line[llen-1] == '\t'))
+				line[--llen] = 0;
+		}
 		while (*p == ' ') p++;
 		if (!line[0] || !*p) continue;
 		s->labels[s->count] = strdup(line);
@@ -238,7 +243,7 @@ static void load_simple(struct submenu *s) {
 	if (!f) return;
 	parse_items(s, f);
 	fclose(f);
-	s->page_max = s->count > PER_PAGE ? (s->count - 1) / PER_PAGE : 0;
+	s->page_max = s->count > per_page ? (s->count - 1) / per_page : 0;
 }
 
 static void load_games(struct submenu *s) {
@@ -251,6 +256,12 @@ static void load_games(struct submenu *s) {
 		char *p = strchr(line, '|');
 		if (!p) continue;
 		*p++ = 0;
+		/* trim trailing whitespace from the label */
+		{
+			size_t llen = strlen(line);
+			while (llen > 0 && (line[llen-1] == ' ' || line[llen-1] == '\t'))
+				line[--llen] = 0;
+		}
 		char *exe_path = strchr(p, '|');
 		if (!exe_path) continue;
 		*exe_path++ = 0;
@@ -292,7 +303,7 @@ static void load_games(struct submenu *s) {
 	}
 	fclose(f);
 	sort_games(s);
-	s->page_max = s->count > PER_PAGE ? (s->count - 1) / PER_PAGE : 0;
+	s->page_max = s->count > per_page ? (s->count - 1) / per_page : 0;
 }
 
 static void build_categories(void) {
@@ -333,7 +344,7 @@ static void build_main_menu(void) {
 		mainmenu.labels[2] = "Files";    mainmenu.commands[2] = "st -e ranger";
 		mainmenu.count = 3;
 	}
-	mainmenu.page_max = mainmenu.count > PER_PAGE ? (mainmenu.count - 1) / PER_PAGE : 0;
+	mainmenu.page_max = mainmenu.count > per_page ? (mainmenu.count - 1) / per_page : 0;
 }
 
 static void gen_submenu(struct submenu *s) {
@@ -342,12 +353,30 @@ static void gen_submenu(struct submenu *s) {
 	if (p) {
 		parse_items(s, p);
 		pclose(p);
-		s->page_max = s->count > PER_PAGE ? (s->count - 1) / PER_PAGE : 0;
+		s->page_max = s->count > per_page ? (s->count - 1) / per_page : 0;
 	}
 	s->generated = 0;
 }
 
 static void draw(void);
+
+/* truncate label to maxw pixels, appending "..." if needed */
+static void truncate_label(const char *in, char *out, size_t outsz, int maxw) {
+	size_t len = strlen(in);
+	if (len + 1 > outsz) len = outsz - 1;
+	memcpy(out, in, len);
+	out[len] = '\0';
+	if (appfont_width(afont, out, (int)len) <= maxw)
+		return;
+	while (len > 3) {
+		len--;
+		memcpy(out + len - 3, "...", 3);
+		out[len] = '\0';
+		if (appfont_width(afont, out, (int)len) <= maxw)
+			return;
+	}
+	out[0] = '.'; out[1] = '.'; out[2] = '.'; out[3] = '\0';
+}
 
 static void enter_submenu(struct submenu *s) {
 	if (nav_depth >= MAX_NAV) return;
@@ -361,35 +390,45 @@ static void enter_submenu(struct submenu *s) {
 }
 
 static void draw_submenu(struct submenu *s) {
+	int hdr_y = itemh + 6;          /* header baseline */
+	int rule_y = itemh + 18;        /* rule under header */
+	int top_margin = itemh * 2;     /* space reserved for header+rule */
+	int bot_margin = itemh + 20;    /* space reserved for footer */
+	int base_off = itemh - 8;       /* baseline offset within a row */
+	int ftr_y = win_h - (itemh / 2 + 7);
+
 	XSetForeground(dpy, gc, c_bg);
 	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, win_h);
 
 	const char *hdr = s->title[0] ? s->title : "b y t e m e n u";
-	int tw = appfont_width(afont, hdr, (int)strlen(hdr));
-	appfont_draw(afont, win, gc, &fc_dim, c_dim, (PAPER_W - tw) / 2, 36, hdr, (int)strlen(hdr));
+	char hbuf[128];
+	truncate_label(hdr, hbuf, sizeof(hbuf), PAPER_W - 16);
+	int tw = appfont_width(afont, hbuf, (int)strlen(hbuf));
+	appfont_draw(afont, win, gc, &fc_dim, c_dim, (PAPER_W - tw) / 2, hdr_y, hbuf, (int)strlen(hbuf));
 
 	XSetForeground(dpy, gc, c_border);
-	XFillRectangle(dpy, win, gc, 20, 48, PAPER_W - 40, 2);
+	XFillRectangle(dpy, win, gc, 20, rule_y, PAPER_W - 40, 2);
 	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, BORDER_W);
 	XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
 	XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, win_h);
 	XFillRectangle(dpy, win, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
 
-	int page_count = s->fmatch - s->page * PER_PAGE;
-	if (page_count > PER_PAGE) page_count = PER_PAGE;
+	int page_count = s->fmatch - s->page * per_page;
+	if (page_count > per_page) page_count = per_page;
 	if (page_count < 0) page_count = 0;
-	int block = page_count * ITEM_H;
-	int top = 60 + ((win_h - 60 - 50) - block) / 2;
+	int block = page_count * itemh;
+	int top = top_margin + ((win_h - top_margin - bot_margin) - block) / 2;
+	char tmp[256];
 	for (int i = 0; i < page_count; i++) {
-		int idx = s->fmap[s->page * PER_PAGE + i];
-		int y = top + i * ITEM_H;
+		int idx = s->fmap[s->page * per_page + i];
+		int y = top + i * itemh;
 		int is_sel = (i == s->sel);
-		const char *lbl = s->labels[idx];
-		tw = appfont_width(afont, lbl, (int)strlen(lbl));
+		truncate_label(s->labels[idx], tmp, sizeof(tmp), PAPER_W - 32);
+		tw = appfont_width(afont, tmp, (int)strlen(tmp));
 		if (is_sel)
-			appfont_draw(afont, win, gc, &fc_hi, c_hi, (PAPER_W - tw) / 2 - 20, y + 22, ">", 1);
+			appfont_draw(afont, win, gc, &fc_hi, c_hi, (PAPER_W - tw) / 2 - 20, y + base_off, ">", 1);
 		appfont_draw(afont, win, gc, is_sel ? &fc_hi : &fc_fg,
-		             is_sel ? c_hi : c_fg, (PAPER_W - tw) / 2, y + 22, lbl, (int)strlen(lbl));
+		             is_sel ? c_hi : c_fg, (PAPER_W - tw) / 2, y + base_off, tmp, (int)strlen(tmp));
 	}
 
 	if (s->fmatch == 0) {
@@ -400,26 +439,32 @@ static void draw_submenu(struct submenu *s) {
 
 	char ftr[96];
 	if (s->filter[0]) {
-		if (s->page_max > 0)
-			snprintf(ftr, sizeof(ftr), "find: %s  [%d/%d]", s->filter, s->page + 1, s->page_max + 1);
-		else
-			snprintf(ftr, sizeof(ftr), "find: %s", s->filter);
+		snprintf(ftr, sizeof(ftr), "find: %s", s->filter);
 	} else if (s->page_max > 0) {
-		snprintf(ftr, sizeof(ftr), "[%d/%d]   j/k  ]/[  esc", s->page + 1, s->page_max + 1);
+		snprintf(ftr, sizeof(ftr), "j/k  ]/[  esc");
 	} else {
-		snprintf(ftr, sizeof(ftr), "type to search  esc");
+		snprintf(ftr, sizeof(ftr), s == &mainmenu ? "j/k  enter  esc" : "j/k  esc");
+	}
+	/* reserve room for the page indicator in the bottom-right corner */
+	int ftr_w = 0;
+	if (s->page_max > 0) {
+		char pg[32];
+		snprintf(pg, sizeof(pg), "[%d/%d]", s->page + 1, s->page_max + 1);
+		ftr_w = appfont_width(afont, pg, (int)strlen(pg));
+		appfont_draw(afont, win, gc, &fc_dim, c_dim,
+			PAPER_W - ftr_w - 12, ftr_y, pg, (int)strlen(pg));
 	}
 	tw = appfont_width(afont, ftr, (int)strlen(ftr));
-	if (tw > PAPER_W - 16) {
+	if (tw > PAPER_W - 16 - ftr_w) {
 		/* trim from the front to fit */
 		size_t n = strlen(ftr);
-		while (tw > PAPER_W - 16 && n > 0) {
+		while (tw > PAPER_W - 16 - ftr_w && n > 0) {
 			memmove(ftr, ftr + 1, n);
 			n--;
 			tw = appfont_width(afont, ftr, (int)n);
 		}
 	}
-	appfont_draw(afont, win, gc, &fc_dim, c_dim, (PAPER_W - tw) / 2, win_h - 22, ftr, (int)strlen(ftr));
+	appfont_draw(afont, win, gc, &fc_dim, c_dim, (PAPER_W - tw) / 2, ftr_y, ftr, (int)strlen(ftr));
 
 	XSync(dpy, False);
 }
@@ -513,11 +558,6 @@ int main(void) {
 	signal(SIGQUIT, sigcleanup);
 	signal(SIGPIPE, sigcleanup);
 
-	build_categories();
-	load_categories();
-	build_main_menu();
-	recompute_filter(&mainmenu);
-
 	dpy = XOpenDisplay(NULL);
 	if (!dpy) return 1;
 	int scr = DefaultScreen(dpy);
@@ -528,6 +568,16 @@ int main(void) {
 	afont = appfont_open(dpy, appfont_sharedname());
 	if (!afont) return 1;
 
+	win_h = PAPER_H;
+	if (win_h > sh - 40) win_h = sh - 40;
+	if (win_h < 240) win_h = 240;
+
+	/* adaptive layout: row height + rows/page derive from the font */
+	itemh = afont->height + 14;
+	per_page = (win_h - itemh * 3 - 20) / itemh;
+	if (per_page < 1) per_page = 1;
+	if (per_page > 6) per_page = 6;
+
 	c_bg     = getcol("#282828");
 	c_fg     = getcol("#ebdbb2");
 	c_hi     = getcol("#d65d0e");
@@ -537,9 +587,10 @@ int main(void) {
 	appfont_alloccolor(dpy, "#d65d0e", &fc_hi);
 	appfont_alloccolor(dpy, "#a89984", &fc_dim);
 
-	win_h = PAPER_H;
-	if (win_h > sh - 40) win_h = sh - 40;
-	if (win_h < 240) win_h = 240;
+	build_categories();
+	load_categories();
+	build_main_menu();
+	recompute_filter(&mainmenu);
 
 	XSetWindowAttributes wa = {
 		.override_redirect = True,
@@ -589,7 +640,7 @@ int main(void) {
 					done = 1;
 				}
 			} else if (ks == XK_Return) {
-				int idx = s->page * PER_PAGE + s->sel;
+				int idx = s->page * per_page + s->sel;
 				if (idx >= 0 && idx < s->fmatch) {
 					int real = s->fmap[idx];
 					if (s->children[real]) {
@@ -613,14 +664,14 @@ int main(void) {
 					draw();
 				}
 			} else if (ks == XK_Down) {
-				int page_count = s->fmatch - s->page * PER_PAGE;
-				if (page_count > PER_PAGE) page_count = PER_PAGE;
+				int page_count = s->fmatch - s->page * per_page;
+				if (page_count > per_page) page_count = per_page;
 				if (s->sel < page_count - 1) { s->sel++; draw(); }
 			} else if (ks == XK_Up) {
 				if (s->sel > 0) { s->sel--; draw(); }
 			} else if (!s->filter[0] && ks == XK_j) {
-				int page_count = s->fmatch - s->page * PER_PAGE;
-				if (page_count > PER_PAGE) page_count = PER_PAGE;
+				int page_count = s->fmatch - s->page * per_page;
+				if (page_count > per_page) page_count = per_page;
 				if (s->sel < page_count - 1) { s->sel++; draw(); }
 			} else if (!s->filter[0] && ks == XK_k) {
 				if (s->sel > 0) { s->sel--; draw(); }
