@@ -11,6 +11,8 @@
 #include <signal.h>
 #include <ctype.h>
 #include <sys/stat.h>
+#include <sys/select.h>
+#include <time.h>
 #include "appfont.h"
 
 #define MAX_CATS     8
@@ -26,8 +28,17 @@ static GC gc;
 static AppFont *afont;
 static int sw, sh, win_h;
 static int itemh, per_page;
-static unsigned long c_bg, c_fg, c_hi, c_border, c_dim;
+static unsigned long c_bg, c_fg, c_hi, c_border, c_dim, c_field;
 static XftColor fc_fg, fc_hi, fc_dim;
+static int cursor_on = 1;
+
+static long
+now_ms(void)
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
+}
 
 struct submenu {
 	char *label;
@@ -360,6 +371,14 @@ static void gen_submenu(struct submenu *s) {
 
 static void draw(void);
 
+/* the search field only makes sense on long, searchable lists */
+static int show_field(const struct submenu *s) {
+	return s->label &&
+	       (!strcmp(s->label, "Softwares") ||
+	        !strcmp(s->label, "Games") ||
+	        !strcmp(s->label, "Font"));
+}
+
 /* truncate label to maxw pixels, appending "..." if needed */
 static void truncate_label(const char *in, char *out, size_t outsz, int maxw) {
 	size_t len = strlen(in);
@@ -392,8 +411,6 @@ static void enter_submenu(struct submenu *s) {
 static void draw_submenu(struct submenu *s) {
 	int hdr_y = itemh + 6;          /* header baseline */
 	int rule_y = itemh + 18;        /* rule under header */
-	int top_margin = itemh * 2;     /* space reserved for header+rule */
-	int bot_margin = itemh + 20;    /* space reserved for footer */
 	int base_off = itemh - 8;       /* baseline offset within a row */
 	int ftr_y = win_h - (itemh / 2 + 7);
 
@@ -413,11 +430,44 @@ static void draw_submenu(struct submenu *s) {
 	XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, win_h);
 	XFillRectangle(dpy, win, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
 
+	/* search field with blinking cursor */
+	int input_y = rule_y + itemh;
+	int area_top, area_bot;
+	if (show_field(s)) {
+		int fw = PAPER_W - 80;
+		if (fw < 160) fw = 160;
+		int fx = (PAPER_W - fw) / 2;
+		int fy = input_y - itemh / 2 + 2;
+		int fh = itemh - 4;
+		int field_base = fy + (fh - afont->height) / 2 + afont->ascent;
+		XSetForeground(dpy, gc, c_field);
+		XFillRectangle(dpy, win, gc, fx, fy, fw, fh);
+		XSetForeground(dpy, gc, c_border);
+		XDrawRectangle(dpy, win, gc, fx, fy, fw - 1, fh - 1);
+
+		char disp[512];
+		const char *tail = s->filter;
+		int maxw = fw - 24;
+		while (*tail && appfont_width(afont, tail, (int)strlen(tail)) > maxw - 20)
+			tail++;
+		snprintf(disp, sizeof(disp), "> %s", tail);
+		tw = appfont_width(afont, disp, (int)strlen(disp));
+		appfont_draw(afont, win, gc, &fc_fg, c_fg, fx + 10, field_base, disp, (int)strlen(disp));
+		if (cursor_on) {
+			XSetForeground(dpy, gc, c_hi);
+			XFillRectangle(dpy, win, gc, fx + 10 + tw + 1, fy + (fh - 12) / 2, 7, 12);
+		}
+		area_top = input_y + itemh;
+	} else {
+		area_top = itemh * 2;
+	}
+	area_bot = ftr_y - itemh;
+
 	int page_count = s->fmatch - s->page * per_page;
 	if (page_count > per_page) page_count = per_page;
 	if (page_count < 0) page_count = 0;
 	int block = page_count * itemh;
-	int top = top_margin + ((win_h - top_margin - bot_margin) - block) / 2;
+	int top = area_top + ((area_bot - area_top) - block) / 2;
 	char tmp[256];
 	for (int i = 0; i < page_count; i++) {
 		int idx = s->fmap[s->page * per_page + i];
@@ -438,9 +488,7 @@ static void draw_submenu(struct submenu *s) {
 	}
 
 	char ftr[96];
-	if (s->filter[0]) {
-		snprintf(ftr, sizeof(ftr), "find: %s", s->filter);
-	} else if (s->page_max > 0) {
+	if (s->page_max > 0) {
 		snprintf(ftr, sizeof(ftr), "j/k  ]/[  esc");
 	} else {
 		snprintf(ftr, sizeof(ftr), s == &mainmenu ? "j/k  enter  esc" : "j/k  esc");
@@ -583,6 +631,7 @@ int main(void) {
 	c_hi     = getcol("#d65d0e");
 	c_border = getcol("#689d6a");
 	c_dim    = getcol("#a89984");
+	c_field  = getcol("#3c3836");
 	appfont_alloccolor(dpy, "#ebdbb2", &fc_fg);
 	appfont_alloccolor(dpy, "#d65d0e", &fc_hi);
 	appfont_alloccolor(dpy, "#a89984", &fc_dim);
@@ -615,16 +664,31 @@ int main(void) {
 		None, None, CurrentTime);
 
 	XEvent ev;
+	int fd = ConnectionNumber(dpy);
+	long last_blink = 0;
 	int done = 0;
 	while (!done) {
-		XNextEvent(dpy, &ev);
-		if (ev.type == Expose && ev.xexpose.count == 0)
-			draw();
-		else if (ev.type == KeyPress) {
-			KeySym ks = XLookupKeysym(&ev.xkey, 0);
-			char lbuf[32];
-			int llen = XLookupString(&ev.xkey, lbuf, sizeof(lbuf), NULL, NULL);
-			struct submenu *s = nav[nav_depth - 1];
+		fd_set rfds;
+		struct timeval tv;
+		FD_ZERO(&rfds);
+		FD_SET(fd, &rfds);
+		tv.tv_sec = 0;
+		tv.tv_usec = 50000;
+		int r = select(fd + 1, &rfds, NULL, NULL, &tv);
+		if (r > 0) {
+			while (XPending(dpy) && !done) {
+				XNextEvent(dpy, &ev);
+				if (ev.type == Expose && ev.xexpose.count == 0) {
+					draw();
+					continue;
+				}
+				if (ev.type != KeyPress) continue;
+				cursor_on = 1;
+				last_blink = now_ms();
+				KeySym ks = XLookupKeysym(&ev.xkey, 0);
+				char lbuf[32];
+				int llen = XLookupString(&ev.xkey, lbuf, sizeof(lbuf), NULL, NULL);
+				struct submenu *s = nav[nav_depth - 1];
 
 			if (ks == XK_Escape || ks == XK_q) {
 				if (s->filter[0]) {
@@ -697,6 +761,14 @@ int main(void) {
 					if (s->page < 0) s->page = 0;
 					draw();
 				}
+			}
+			}
+		} else {
+			long now = now_ms();
+			if (now - last_blink >= 500) {
+				cursor_on = !cursor_on;
+				last_blink = now;
+				draw();
 			}
 		}
 	}
