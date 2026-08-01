@@ -63,6 +63,11 @@ if [ "$mc" = "y" ] || [ "$mc" = "Y" ]; then
 	pkill mpd 2>/dev/null
 	mpd "$HOME/.config/mpd/mpd.conf" 2>/dev/null || true
 	echo "     mpd configured (starts via autostart)"
+
+	echo "==> Configuring ncmpcpp..."
+	mkdir -p "$HOME/.config/ncmpcpp"
+	curl -fsSL "$BASE/ncmpcpp.conf" -o "$HOME/.config/ncmpcpp/config"
+	echo "     ncmpcpp configured (bitrate shown for current song)"
 fi
 
 echo ""
