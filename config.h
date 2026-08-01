@@ -98,6 +98,9 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_F11,    spawn,          {.v = (char *[]){"/bin/sh","-c","echo + > /tmp/bytevol.fifo; echo 1 > /tmp/bytewm_status.fifo",NULL} } },
 	{ MODKEY,                       XK_F12,    spawn,          {.v = (char *[]){"/bin/sh","-c","echo toggle > /tmp/bytevol.fifo; echo 1 > /tmp/bytewm_status.fifo",NULL} } },
 	{ MODKEY|ShiftMask,             XK_v,      spawn,          {.v = (char *[]){"/bin/sh","-c","echo show > /tmp/bytevol.fifo",NULL} } },
+	{ MODKEY|ShiftMask,             XK_p,      spawn,          {.v = (char *[]){"mpc", "toggle", NULL} } },
+	{ MODKEY|ShiftMask,             XK_comma,  spawn,          {.v = (char *[]){"mpc", "prev", NULL} } },
+	{ MODKEY|ShiftMask,             XK_period, spawn,          {.v = (char *[]){"mpc", "next", NULL} } },
 	{ MODKEY,                       XK_0,      view,           {.ui = ~0 } },
 	{ MODKEY|ShiftMask,             XK_0,      toggletag,      {.ui = ~0 } },
 
