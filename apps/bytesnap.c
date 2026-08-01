@@ -12,9 +12,9 @@
 #include <fcntl.h>
 #include "appfont.h"
 
-#define MENU_W   300
-#define ITEM_H   30
-#define BORDER_W 2
+#define PAPER_W   320
+#define PAPER_H   360
+#define BORDER_W  2
 
 static unsigned long getcol(Display *dpy, const char *s) {
 	XColor xc;
@@ -106,9 +106,9 @@ static void countdown(Display *dpy, Window root, int screen) {
 	XFillRectangle(dpy, cwin, cgc, 0, 0, 40, 30);
 	XFlush(dpy);
 	sleep(1);
+	appfont_close(afont);
 	XDestroyWindow(dpy, cwin);
 	XFreeGC(dpy, cgc);
-	appfont_close(afont);
 	XSync(dpy, False);
 }
 
@@ -118,32 +118,42 @@ static void draw_menu(Display *dpy, Window win, GC gc, AppFont *afont,
 	XftColor *fc_fg, XftColor *fc_hi, XftColor *fc_dim,
 	char **labels, int count, int sel, int win_h)
 {
+	int itemh = afont->height + 14;
+	int hdr_y = itemh + 6;
+	int rule_y = itemh + 18;
+	int top_margin = itemh * 2;
+	int bot_margin = itemh + 20;
+	int base_off = itemh - 8;
+	int ftr_y = win_h - (itemh / 2 + 7);
+
 	XSetForeground(dpy, gc, c_bg);
-	XFillRectangle(dpy, win, gc, 0, 0, MENU_W, win_h);
+	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, win_h);
 
 	const char *hdr = "b y t e s n a p";
 	int tw = appfont_width(afont, hdr, (int)strlen(hdr));
-	appfont_draw(afont, win, gc, fc_dim, c_dim, (MENU_W - tw) / 2, 28, hdr, (int)strlen(hdr));
+	appfont_draw(afont, win, gc, fc_dim, c_dim, (PAPER_W - tw) / 2, hdr_y, hdr, (int)strlen(hdr));
 
 	XSetForeground(dpy, gc, c_border);
-	XFillRectangle(dpy, win, gc, 20, 42, MENU_W - 40, 1);
-	XFillRectangle(dpy, win, gc, 0, 0, MENU_W, BORDER_W);
+	XFillRectangle(dpy, win, gc, 20, rule_y, PAPER_W - 40, 2);
+	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, BORDER_W);
+	XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
 	XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, win_h);
-	XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, MENU_W, BORDER_W);
-	XFillRectangle(dpy, win, gc, MENU_W - BORDER_W, 0, BORDER_W, win_h);
+	XFillRectangle(dpy, win, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
 
-	int y = 56;
+	int block = count * itemh;
+	int top = top_margin + ((win_h - top_margin - bot_margin) - block) / 2;
 	for (int i = 0; i < count; i++) {
+		int y = top + i * itemh;
+		tw = appfont_width(afont, labels[i], (int)strlen(labels[i]));
 		if (i == sel)
-			appfont_draw(afont, win, gc, fc_hi, c_hi, 12, y + 20, ">", 1);
+			appfont_draw(afont, win, gc, fc_hi, c_hi, (PAPER_W - tw) / 2 - 20, y + base_off, ">", 1);
 		appfont_draw(afont, win, gc, i == sel ? fc_hi : fc_fg,
-		             i == sel ? c_hi : c_fg, 28, y + 20, labels[i], (int)strlen(labels[i]));
-		y += ITEM_H;
+		             i == sel ? c_hi : c_fg, (PAPER_W - tw) / 2, y + base_off, labels[i], (int)strlen(labels[i]));
 	}
 
 	const char *ftr = "j/k  enter  esc";
 	tw = appfont_width(afont, ftr, (int)strlen(ftr));
-	appfont_draw(afont, win, gc, fc_dim, c_dim, (MENU_W - tw) / 2, win_h - 12, ftr, (int)strlen(ftr));
+	appfont_draw(afont, win, gc, fc_dim, c_dim, (PAPER_W - tw) / 2, ftr_y, ftr, (int)strlen(ftr));
 
 	XSync(dpy, False);
 }
@@ -152,7 +162,9 @@ static int show_menu(Display *dpy, int screen, int sw, int sh) {
 	Window root = RootWindow(dpy, screen);
 	char *labels[] = { "fullscreen", "region", "window" };
 	int count = 3;
-	int win_h = 44 + count * ITEM_H + 30;
+	int win_h = PAPER_H;
+	if (win_h > sh - 40) win_h = sh - 40;
+	if (win_h < 240) win_h = 240;
 
 	AppFont *afont = appfont_open(dpy, appfont_sharedname());
 	if (!afont) return -1;
@@ -173,8 +185,8 @@ static int show_menu(Display *dpy, int screen, int sw, int sh) {
 		.event_mask = ExposureMask | KeyPressMask
 	};
 	Window win = XCreateWindow(dpy, root,
-		(sw - MENU_W) / 2, (sh - win_h) / 2,
-		MENU_W, win_h, 0,
+		(sw - PAPER_W) / 2, (sh - win_h) / 2,
+		PAPER_W, win_h, 0,
 		DefaultDepth(dpy, screen), CopyFromParent,
 		DefaultVisual(dpy, screen),
 		CWOverrideRedirect | CWBackPixel | CWEventMask, &wa);
