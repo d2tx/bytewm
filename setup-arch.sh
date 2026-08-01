@@ -25,6 +25,24 @@ sudo pacman -S --needed --noconfirm \
 echo "==> Rebuilding font cache (ensures bitmap/Xft fonts are registered)..."
 fc-cache -f 2>/dev/null || true
 
+echo "==> Installing Cozette bitmap font (GitHub release, not AUR)..."
+mkdir -p "$HOME/.local/share/fonts"
+COZETTE_VER="v.1.30.0"
+for f in cozette.otb cozette_hidpi.otb; do
+  if [ ! -f "$HOME/.local/share/fonts/$f" ]; then
+    curl -fsSL -o "$HOME/.local/share/fonts/$f" \
+      "https://github.com/the-moonwitch/Cozette/releases/download/$COZETTE_VER/$f" \
+      || echo "     WARNING: failed to fetch $f"
+  fi
+done
+fc-cache -f 2>/dev/null || true
+if fc-list 2>/dev/null | grep -qi '^Cozette'; then
+  echo "     Cozette installed"
+else
+  echo "     WARNING: Cozette not registered"
+fi
+
+
 echo "==> Adding user to audio group (for ALSA access)..."
 sudo usermod -aG audio "$USER"
 echo "     done (re-login needed)"

@@ -10,6 +10,17 @@ case "$1" in
 			[ -z "$fam" ] && continue
 			case "$fam" in *.pcf) continue ;; esac
 			case " $BITMAPS " in *" $fam "*) continue ;; esac
+			case "$fam" in
+				Cozette)
+					if fc-list --format='%{family} %{style}\n' 2>/dev/null | grep -qx 'Cozette Medium'; then
+						printf 'Cozette (4x10 small) | __GEN__ "%s/.config/bytewm/fontmenu.sh" sizes "Cozette small"\n' "$HOME"
+					fi
+					if fc-list --format='%{family} %{style}\n' 2>/dev/null | grep -qx 'Cozette HiDpi'; then
+						printf 'Cozette HiDpi (8x20 big) | __GEN__ "%s/.config/bytewm/fontmenu.sh" sizes "Cozette HiDpi"\n' "$HOME"
+					fi
+					continue
+					;;
+			esac
 			printf '%s | __GEN__ "%s/.config/bytewm/fontmenu.sh" sizes "%s"\n' "$fam" "$HOME" "$fam"
 		done
 		;;
@@ -23,13 +34,27 @@ case "$1" in
 				exit 0
 				;;
 		esac
+		case "$fam" in
+			"Cozette small")
+				for sz in 10 13 16; do
+					printf '%s | "%s/.config/bytewm/font.sh" "Cozette:size=%s"\n' "$sz" "$HOME" "$sz"
+				done
+				exit 0
+				;;
+			"Cozette HiDpi")
+				for sz in 20 26 32; do
+					printf '%s | "%s/.config/bytewm/font.sh" "Cozette:size=%s"\n' "$sz" "$HOME" "$sz"
+				done
+				exit 0
+				;;
+		esac
 		case " $BITMAPS " in
 			*" $fam "*)
 				printf 'default | "%s/.config/bytewm/font.sh" "%s"\n' "$HOME" "$fam"
 				exit 0
 				;;
 		esac
-		for sz in 8 9 10 11 12 13 14 16; do
+		for sz in 8 9 10 11 12 13 14 16 18 20 22 24 26 32; do
 			printf '%s | "%s/.config/bytewm/font.sh" "%s:size=%s"\n' "$sz" "$HOME" "$fam" "$sz"
 		done
 		;;
