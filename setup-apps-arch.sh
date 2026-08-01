@@ -56,13 +56,13 @@ fi
 
 # ── mpd ──────────────────────────────────────────────────
 if [ "$mc" = "y" ] || [ "$mc" = "Y" ]; then
-	if ! systemctl --user is-enabled mpd 2>/dev/null | grep -q enabled; then
-		echo "==> Configuring mpd..."
-		mkdir -p "$HOME/.config/mpd/playlists" "$HOME/music"
-		curl -fsSL "$BASE/mpd.conf" -o "$HOME/.config/mpd/mpd.conf"
-		systemctl --user enable --now mpd 2>/dev/null || true
-		echo "     mpd configured and enabled"
-	fi
+	echo "==> Configuring mpd..."
+	mkdir -p "$HOME/.config/mpd/playlists" "$HOME/music"
+	curl -fsSL "$BASE/mpd.conf" -o "$HOME/.config/mpd/mpd.conf"
+	# starts on login via bytewm autostart (no systemd --user session required)
+	pkill mpd 2>/dev/null
+	mpd "$HOME/.config/mpd/mpd.conf" 2>/dev/null || true
+	echo "     mpd configured (starts via autostart)"
 fi
 
 echo ""

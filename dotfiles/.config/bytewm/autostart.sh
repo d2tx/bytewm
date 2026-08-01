@@ -27,3 +27,7 @@ pkill bytevol 2>/dev/null
 rm -f /tmp/bytevol.fifo
 mkfifo /tmp/bytevol.fifo
 bytevol &
+
+# music player daemon (for ncmpcpp)
+pkill mpd 2>/dev/null
+mpd ~/.config/mpd/mpd.conf &
