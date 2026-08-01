@@ -22,6 +22,9 @@ sudo pacman -S --needed --noconfirm \
   feh xorg-xrdb xorg-xrandr xorg-fonts-misc pam git ttf-dejavu terminus-font \
   smartmontools bat fish neovim ranger
 
+echo "==> Rebuilding font cache (ensures bitmap/Xft fonts are registered)..."
+fc-cache -f 2>/dev/null || true
+
 echo "==> Adding user to audio group (for ALSA access)..."
 sudo usermod -aG audio "$USER"
 echo "     done (re-login needed)"
