@@ -8,7 +8,7 @@ case "$1" in
 					r = $i; gsub(/[*+]/, "", r)
 					sub(/\.00$/, "", r)
 					if (r ~ /^[0-9]+(\.[0-9]+)?$/ && !seen[r]++)
-						print r " | \"" home "/.config/bytewm/res.sh\" \"" w "\" " r
+						print r "hz | \"" home "/.config/bytewm/res.sh\" \"" w "\" " r
 				}
 			}
 		'
