@@ -13,18 +13,18 @@
 #include <time.h>
 #include <math.h>
 #include <sys/stat.h>
+#include "appfont.h"
 
 static Display *dpy;
 static Window root, win;
 static GC gc;
-static XFontStruct *xfont;
+static AppFont *afont;
 static int bh, sw, sh;
 static int level = -1;   /* displayed volume 0-100, -1 = hidden */
 static int cur = 50;     /* ground-truth level 0-100 from amixer */
 static int muted = 0;
 static time_t shown_time = 0;
 
-static const char *font = "fixed";
 static const char *bg = "#282828";
 static const char *fg = "#ebdbb2";
 static const char *barcolor = "#689d6a";
@@ -39,6 +39,7 @@ static const char *level_file = "/tmp/bytevol_level";
 #define CURVE_MAXDB 90.0
 
 static unsigned long fgcol, bgcol, barcol, bordercol;
+static XftColor fc_fg;
 
 static unsigned long
 getcol(const char *c)
@@ -155,7 +156,7 @@ draw(void)
 	else
 		snprintf(label, sizeof(label), "VOL %d%%", level);
 
-	int tw = XTextWidth(xfont, label, strlen(label)) + 16;
+	int tw = appfont_width(afont, label, (int)strlen(label)) + 16;
 	int bw = 100;
 	int w = tw + bw + 24;
 	int x = (sw - w) / 2;
@@ -170,8 +171,8 @@ draw(void)
 	XFillRectangle(dpy, win, gc, 1, 1, w - 2, bh - 2);
 	XSetForeground(dpy, gc, fgcol);
 	int tx = 8;
-	int ty = (bh - (xfont->ascent + xfont->descent)) / 2 + xfont->ascent;
-	XDrawString(dpy, win, gc, tx, ty, label, strlen(label));
+	int ty = (bh - afont->height) / 2 + afont->ascent;
+	appfont_draw(afont, win, gc, &fc_fg, fgcol, tx, ty, label, (int)strlen(label));
 
 	int barx = tw + 8;
 	int bary = bh / 3;
@@ -253,10 +254,9 @@ main(int argc, char *argv[])
 	sw = DisplayWidth(dpy, screen);
 	sh = DisplayHeight(dpy, screen);
 
-	xfont = XLoadQueryFont(dpy, font);
-	if (!xfont) xfont = XLoadQueryFont(dpy, "fixed");
-	if (!xfont) return 1;
-	bh = xfont->ascent + xfont->descent + 8;
+	afont = appfont_open(dpy, appfont_sharedname());
+	if (!afont) return 1;
+	bh = afont->height + 8;
 
 	gc = XCreateGC(dpy, root, 0, NULL);
 
@@ -264,6 +264,7 @@ main(int argc, char *argv[])
 	fgcol = getcol(fg);
 	barcol = getcol(barcolor);
 	bordercol = getcol(bordercolor);
+	appfont_alloccolor(dpy, fg, &fc_fg);
 
 	XSetWindowAttributes wa = {
 		.override_redirect = True,
@@ -300,7 +301,7 @@ main(int argc, char *argv[])
 		}
 		XUnmapWindow(dpy, win);
 		XDestroyWindow(dpy, win);
-		XFreeFont(dpy, xfont);
+		appfont_close(afont);
 		XFreeGC(dpy, gc);
 		XCloseDisplay(dpy);
 		return 0;
@@ -312,7 +313,7 @@ main(int argc, char *argv[])
 	int fd = open(fifo_path, O_RDWR | O_NONBLOCK | O_CLOEXEC);
 	if (fd < 0) {
 		XDestroyWindow(dpy, win);
-		XFreeFont(dpy, xfont);
+		appfont_close(afont);
 		XFreeGC(dpy, gc);
 		XCloseDisplay(dpy);
 		return 1;
@@ -322,7 +323,7 @@ main(int argc, char *argv[])
 		if (fstat(fd, &st) == 0 && !S_ISFIFO(st.st_mode)) {
 			close(fd);
 			XDestroyWindow(dpy, win);
-			XFreeFont(dpy, xfont);
+			appfont_close(afont);
 			XFreeGC(dpy, gc);
 			XCloseDisplay(dpy);
 			return 1;
@@ -398,7 +399,7 @@ main(int argc, char *argv[])
 
 	close(fd);
 	XDestroyWindow(dpy, win);
-	XFreeFont(dpy, xfont);
+	appfont_close(afont);
 	XFreeGC(dpy, gc);
 	XCloseDisplay(dpy);
 	return 0;

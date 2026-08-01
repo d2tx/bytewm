@@ -8,15 +8,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "appfont.h"
 
 static Display *dpy;
 static Window win;
 static GC gc;
-static XFontStruct *xfont;
+static AppFont *afont;
 static int bh, sw;
 static int selected = 0;
 
-static const char *font = "fixed";
 static const char *bg = "#282828";
 static const char *fg = "#ebdbb2";
 static const char *selbg = "#689d6a";
@@ -42,6 +42,7 @@ getcol(const char *c)
 }
 
 static unsigned long cbg, cfg, cselbg, cselfg, cborder;
+static XftColor fc_fg, fc_selfg;
 
 static void
 redraw(void)
@@ -55,7 +56,7 @@ redraw(void)
 	/* find widest item */
 	int maxw = 0;
 	for (int i = 0; i < nitems; i++) {
-		int tw = XTextWidth(xfont, items[i], strlen(items[i]));
+		int tw = appfont_width(afont, items[i], (int)strlen(items[i]));
 		if (tw > maxw) maxw = tw;
 	}
 	winw = maxw + pad * 4;
@@ -76,18 +77,17 @@ redraw(void)
 	XFillRectangle(dpy, win, gc, winw - BORDER_W, 0, BORDER_W, winh);
 
 	for (int i = 0; i < nitems; i++) {
-		int tw = XTextWidth(xfont, items[i], strlen(items[i]));
+		int tw = appfont_width(afont, items[i], (int)strlen(items[i]));
 		int ix = (winw - tw) / 2;
 		int iy = 4 + i * itemh + bh / 2;
 
 		if (i == selected) {
 			XSetForeground(dpy, gc, cselbg);
 			XFillRectangle(dpy, win, gc, ix - pad, iy - bh / 2, tw + pad * 2, bh);
-			XSetForeground(dpy, gc, cselfg);
-		} else {
-			XSetForeground(dpy, gc, cfg);
 		}
-		XDrawString(dpy, win, gc, ix, iy + bh / 2 - 2, items[i], strlen(items[i]));
+		appfont_draw(afont, win, gc, i == selected ? &fc_selfg : &fc_fg,
+		             i == selected ? cselfg : cfg,
+		             ix, iy + bh / 2 - 2, items[i], (int)strlen(items[i]));
 	}
 	XFlush(dpy);
 }
@@ -123,20 +123,21 @@ main(int argc, char *argv[])
 	sw = DisplayWidth(dpy, screen);
 	Window root = RootWindow(dpy, screen);
 
-	xfont = XLoadQueryFont(dpy, font);
-	if (!xfont) xfont = XLoadQueryFont(dpy, "fixed");
-	if (!xfont) { XCloseDisplay(dpy); return 1; }
-	bh = xfont->ascent + xfont->descent + 4;
+	afont = appfont_open(dpy, appfont_sharedname());
+	if (!afont) { XCloseDisplay(dpy); return 1; }
+	bh = afont->height + 4;
 
 	cbg = getcol(bg);
 	cfg = getcol(fg);
 	cselbg = getcol(selbg);
 	cselfg = getcol(selfg);
 	cborder = getcol("#689d6a");
+	appfont_alloccolor(dpy, fg, &fc_fg);
+	appfont_alloccolor(dpy, selfg, &fc_selfg);
 
 	int maxw = 0;
 	for (int i = 0; i < nitems; i++) {
-		int tw = XTextWidth(xfont, items[i], strlen(items[i]));
+		int tw = appfont_width(afont, items[i], (int)strlen(items[i]));
 		if (tw > maxw) maxw = tw;
 	}
 
@@ -157,7 +158,6 @@ main(int argc, char *argv[])
 		CWOverrideRedirect|CWBackPixel, &wa);
 
 	gc = XCreateGC(dpy, win, 0, NULL);
-	XSetFont(dpy, gc, xfont->fid);
 
 	XSelectInput(dpy, win, ExposureMask | KeyPressMask |
 		ButtonPressMask | ButtonReleaseMask | PointerMotionMask);

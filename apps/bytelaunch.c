@@ -13,6 +13,7 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "appfont.h"
 
 #define MAX_ITEMS 16384
 #define MAX_VISIBLE 16
@@ -22,7 +23,7 @@
 static Display *dpy;
 static Window  win;
 static GC      gc;
-static XFontStruct *font;
+static AppFont *afont;
 static int    bh, sw, sh, scr;
 
 static char   input[INPUT_MAX + 1];
@@ -35,6 +36,7 @@ static int    n_matches;
 static int    selected;
 
 static unsigned long bgcol, fgcol, selcol, bordercol;
+static XftColor fc_fg, fc_bg;
 
 static unsigned long
 getcol(const char *s)
@@ -141,12 +143,11 @@ draw(void)
 	XFillRectangle(dpy, win, gc, winw - BORDER_W, 0, BORDER_W, height);
 	XFillRectangle(dpy, win, gc, 0, bh, winw, BORDER_W);
 
-	int ty = (bh - (font->ascent + font->descent)) / 2 + font->ascent;
+	int ty = (bh - afont->height) / 2 + afont->ascent;
 
 	char prompt[512];
 	snprintf(prompt, sizeof(prompt), "> %s", input);
-	XSetForeground(dpy, gc, fgcol);
-	XDrawString(dpy, win, gc, 8, ty, prompt, strlen(prompt));
+	appfont_draw(afont, win, gc, &fc_fg, fgcol, 8, ty, prompt, (int)strlen(prompt));
 
 	int start = 0;
 	if (selected >= vis) start = selected - vis + 1;
@@ -158,11 +159,10 @@ draw(void)
 		if (idx == selected) {
 			XSetForeground(dpy, gc, selcol);
 			XFillRectangle(dpy, win, gc, 0, (i + 1) * bh, winw, bh);
-			XSetForeground(dpy, gc, bgcol);
+			appfont_draw(afont, win, gc, &fc_bg, bgcol, 8, y, matches[idx], (int)strlen(matches[idx]));
 		} else {
-			XSetForeground(dpy, gc, fgcol);
+			appfont_draw(afont, win, gc, &fc_fg, fgcol, 8, y, matches[idx], (int)strlen(matches[idx]));
 		}
-		XDrawString(dpy, win, gc, 8, y, matches[idx], strlen(matches[idx]));
 	}
 	XSync(dpy, 0);
 }
@@ -215,17 +215,19 @@ main(void)
 	sh  = DisplayHeight(dpy, scr);
 	Window root = RootWindow(dpy, scr);
 
-	font = XLoadQueryFont(dpy, "fixed");
-	if (!font) { XCloseDisplay(dpy); return 1; }
-	bh = font->ascent + font->descent + 8;
+	afont = appfont_open(dpy, appfont_sharedname());
+	if (!afont) { XCloseDisplay(dpy); return 1; }
+	bh = afont->height + 8;
 
 	bgcol = getcol("#282828");
 	fgcol = getcol("#ebdbb2");
 	selcol= getcol("#689d6a");
 	bordercol = getcol("#689d6a");
+	appfont_alloccolor(dpy, "#ebdbb2", &fc_fg);
+	appfont_alloccolor(dpy, "#282828", &fc_bg);
 
 	scan_path();
-	if (!n_items) { XFreeFont(dpy, font); XCloseDisplay(dpy); return 1; }
+	if (!n_items) { appfont_close(afont); XCloseDisplay(dpy); return 1; }
 
 	gc = XCreateGC(dpy, root, 0, NULL);
 	XSetWindowAttributes wa = { .override_redirect = True, .background_pixel = bgcol };
@@ -293,7 +295,7 @@ main(void)
 
 	XDestroyWindow(dpy, win);
 	XFreeGC(dpy, gc);
-	XFreeFont(dpy, font);
+	appfont_close(afont);
 	XCloseDisplay(dpy);
 	for (int i = 0; i < n_items; i++) free(items[i]);
 	return 0;

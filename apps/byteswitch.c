@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "appfont.h"
 
 #define MAX_WINS 64
 #define ITEM_H   30
@@ -18,9 +19,10 @@
 static Display *dpy;
 static Window root, win;
 static GC gc;
-static XFontStruct *xfont;
+static AppFont *afont;
 static int sw, sh, win_h;
 static unsigned long c_bg, c_fg, c_hi, c_border, c_dim;
+static XftColor fc_fg, fc_hi, fc_dim;
 
 static Window windows[MAX_WINS];
 static char *labels[MAX_WINS];
@@ -51,9 +53,8 @@ static void draw(void) {
     XFillRectangle(dpy, win, gc, 0, 0, WIN_W, win_h);
 
     const char *hdr = "s w i t c h   w i n d o w";
-    int tw = XTextWidth(xfont, hdr, strlen(hdr));
-    XSetForeground(dpy, gc, c_dim);
-    XDrawString(dpy, win, gc, (WIN_W - tw) / 2, 28, hdr, strlen(hdr));
+    int tw = appfont_width(afont, hdr, (int)strlen(hdr));
+    appfont_draw(afont, win, gc, &fc_dim, c_dim, (WIN_W - tw) / 2, 28, hdr, (int)strlen(hdr));
 
     XSetForeground(dpy, gc, c_border);
     XFillRectangle(dpy, win, gc, 20, 42, WIN_W - 40, 2);
@@ -64,19 +65,16 @@ static void draw(void) {
 
     int y = 56;
     for (int i = 0; i < count; i++) {
-        if (i == sel) {
-            XSetForeground(dpy, gc, c_hi);
-            XDrawString(dpy, win, gc, 16, y + 20, ">", 1);
-        }
-        XSetForeground(dpy, gc, i == sel ? c_hi : c_fg);
-        XDrawString(dpy, win, gc, 32, y + 20, labels[i], strlen(labels[i]));
+        if (i == sel)
+            appfont_draw(afont, win, gc, &fc_hi, c_hi, 16, y + 20, ">", 1);
+        appfont_draw(afont, win, gc, i == sel ? &fc_hi : &fc_fg,
+                     i == sel ? c_hi : c_fg, 32, y + 20, labels[i], (int)strlen(labels[i]));
         y += ITEM_H;
     }
 
     const char *ftr = "tab:cycle  release-alt/enter:select  esc:cancel";
-    tw = XTextWidth(xfont, ftr, strlen(ftr));
-    XSetForeground(dpy, gc, c_dim);
-    XDrawString(dpy, win, gc, (WIN_W - tw)/2, win_h - 14, ftr, strlen(ftr));
+    tw = appfont_width(afont, ftr, (int)strlen(ftr));
+    appfont_draw(afont, win, gc, &fc_dim, c_dim, (WIN_W - tw)/2, win_h - 14, ftr, (int)strlen(ftr));
 
     XSync(dpy, False);
 }
@@ -162,14 +160,17 @@ int main(void) {
     sw = DisplayWidth(dpy, scr);
     sh = DisplayHeight(dpy, scr);
 
-    xfont = XLoadQueryFont(dpy, "fixed");
-    if (!xfont) { XCloseDisplay(dpy); return 1; }
+    afont = appfont_open(dpy, appfont_sharedname());
+    if (!afont) { XCloseDisplay(dpy); return 1; }
 
     c_bg     = getcol("#282828");
     c_fg     = getcol("#ebdbb2");
     c_hi     = getcol("#d65d0e");
     c_border = getcol("#689d6a");
     c_dim    = getcol("#a89984");
+    appfont_alloccolor(dpy, "#ebdbb2", &fc_fg);
+    appfont_alloccolor(dpy, "#d65d0e", &fc_hi);
+    appfont_alloccolor(dpy, "#a89984", &fc_dim);
 
     /* collect client list */
     Atom netcl = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
@@ -189,7 +190,7 @@ int main(void) {
         XFree(data);
     }
 
-    if (!count) { XFreeFont(dpy, xfont); XCloseDisplay(dpy); return 0; }
+    if (!count) { appfont_close(afont); XCloseDisplay(dpy); return 0; }
 
     /* find the currently active window so we can start on the NEXT one */
     Atom netactive = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
@@ -227,7 +228,7 @@ int main(void) {
         DefaultVisual(dpy, scr),
         CWOverrideRedirect | CWBackPixel | CWEventMask, &wa);
     gc = XCreateGC(dpy, win, 0, NULL);
-    XSetFont(dpy, gc, xfont->fid);
+
 
     XMapRaised(dpy, win);
     XFlush(dpy);
@@ -318,7 +319,7 @@ int main(void) {
         activate_window(windows[sel]);
 
     XSync(dpy, False);          /* flush activate before destroy */
-    XFreeFont(dpy, xfont);
+    appfont_close(afont);
     XFreeGC(dpy, gc);
     XDestroyWindow(dpy, win);
     XSync(dpy, False);          /* ensure server processes destroy */

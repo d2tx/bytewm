@@ -11,17 +11,17 @@ bytewm: bytewm.c config.h
 config.h:
 	cp config.def.h $@
 
-APPS_CFLAGS = -std=c99 -pedantic -Wall -Os
+APPS_CFLAGS = -std=c99 -pedantic -Wall -Os -Iapps $(X11INCS)
 
 apps:
 	@for app in $(APPBINS); do \
 		if [ -f apps/$$app.c ]; then \
-			$(CC) $(APPS_CFLAGS) -o apps/$$app apps/$$app.c -lX11 -lm; \
+			$(CC) $(APPS_CFLAGS) -o apps/$$app apps/$$app.c apps/appfont.c -lX11 -lXft -lm; \
 		fi; \
 	done
 
 bytewdm: apps/bytewdm.c
-	$(CC) $(APPS_CFLAGS) -o apps/$@ apps/bytewdm.c -lX11 -lpam
+	$(CC) $(APPS_CFLAGS) -o apps/$@ apps/bytewdm.c apps/appfont.c -lX11 -lXft -lpam
 
 bytekill: apps/bytekill.s
 	as -o apps/bytekill.o apps/bytekill.s

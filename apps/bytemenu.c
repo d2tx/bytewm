@@ -9,35 +9,67 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <signal.h>
+#include <ctype.h>
 #include <sys/stat.h>
+#include "appfont.h"
 
-#define MAX_ITEMS  24
-#define MAX_GAMES  256
-#define PER_PAGE   12
-#define PAGE_COL   6
-#define ITEM_H     30
-#define WIN_W      420
-#define GAME_W     520
-#define BORDER_W   2
+#define MAX_CATS     8
+#define MAX_SUBITEMS 256
+#define MAX_NAV      16
+#define PER_PAGE     6
+#define ITEM_H       30
+#define PAPER_W      288
+#define PAPER_H      360
+#define BORDER_W     2
 
 static Display *dpy;
 static Window root, win;
 static GC gc;
-static XFontStruct *xfont;
+static AppFont *afont;
 static int sw, sh, win_h;
 static unsigned long c_bg, c_fg, c_hi, c_border, c_dim;
+static XftColor fc_fg, fc_hi, fc_dim;
 
-static char *labels[MAX_ITEMS], *commands[MAX_ITEMS];
-static int count, sel;
+struct submenu {
+	char *label;
+	char title[64];
+	char path[1024];
+	char *labels[MAX_SUBITEMS];
+	char *commands[MAX_SUBITEMS];   /* NULL -> child submenu */
+	struct submenu *children[MAX_SUBITEMS];
+	int count;
+	int sel, page, page_max;
+	int games;
+	int generated;                  /* 1 -> run gen_cmd before showing */
+	char *gen_cmd;
+	char filter[64];                /* active search text */
+	int fmap[MAX_SUBITEMS];         /* displayed index -> real index */
+	int fmatch;                     /* number of matching items */
+};
 
-static int submenu;
-static char *game_labels[MAX_GAMES];
-static char *game_exe[MAX_GAMES];
-static char *game_proton[MAX_GAMES];
-static char *game_extra[MAX_GAMES];
-static char *game_commands[MAX_GAMES];
-static char game_cmd_buf[MAX_GAMES][4096];
-static int game_count, game_sel, game_col, game_page, game_page_max;
+struct catdef {
+	const char *label;
+	const char *title;
+	const char *file;
+	int games;
+};
+
+static const struct catdef catdefs[] = {
+	{ "Softwares", "s o f t w a r e s", "softwares.conf", 0 },
+	{ "Games",     "g a m e s",         "games.conf",     1 },
+	{ "Settings",  "s e t t i n g s",   "settings.conf",  0 },
+};
+
+static struct submenu cats[MAX_CATS];
+static int cat_count;
+static struct submenu mainmenu;
+static struct submenu *nav[MAX_NAV];
+static int nav_depth;
+
+static char *game_exe[MAX_SUBITEMS];
+static char *game_proton[MAX_SUBITEMS];
+static char *game_extra[MAX_SUBITEMS];
+static char game_cmd_buf[MAX_SUBITEMS][4096];
 
 static char lockpath[256];
 static int lockacquired;
@@ -66,18 +98,49 @@ static unsigned long getcol(const char *s) {
 	return xc.pixel;
 }
 
-static void sort_games(void) {
-	for (int i = 0; i < game_count - 1; i++) {
-		for (int j = i + 1; j < game_count; j++) {
-			if (strcmp(game_labels[i], game_labels[j]) > 0) {
-				char *tl = game_labels[i]; game_labels[i] = game_labels[j]; game_labels[j] = tl;
-				char *te = game_exe[i]; game_exe[i] = game_exe[j]; game_exe[j] = te;
-				char *tp = game_proton[i]; game_proton[i] = game_proton[j]; game_proton[j] = tp;
-				char *tx = game_extra[i]; game_extra[i] = game_extra[j]; game_extra[j] = tx;
-				char *tc = game_commands[i]; game_commands[i] = game_commands[j]; game_commands[j] = tc;
-			}
-		}
+static void spaced_title(char *out, size_t n, const char *s) {
+	size_t o = 0;
+	for (const char *p = s; *p && o + 2 < n; p++) {
+		char c = (*p >= 'A' && *p <= 'Z') ? *p + 32 : *p;
+		out[o++] = c;
+		if (p[1] && o + 2 < n) out[o++] = ' ';
 	}
+	out[o] = '\0';
+}
+
+static struct submenu *new_submenu(const char *label) {
+	struct submenu *s = calloc(1, sizeof(*s));
+	if (!s) return NULL;
+	s->label = strdup(label);
+	spaced_title(s->title, sizeof(s->title), label);
+	return s;
+}
+
+static int contains_ci(const char *h, const char *n) {
+	for (; *h; h++) {
+		const char *a = h, *b = n;
+		while (*a && *b) {
+			char x = *a; if (x >= 'A' && x <= 'Z') x += 32;
+			char y = *b; if (y >= 'A' && y <= 'Z') y += 32;
+			if (x != y) break;
+			a++; b++;
+		}
+		if (!*b) return 1;
+	}
+	return 0;
+}
+
+static void recompute_filter(struct submenu *s) {
+	s->fmatch = 0;
+	if (!s->filter[0]) {
+		for (int i = 0; i < s->count; i++) s->fmap[i] = i;
+		s->fmatch = s->count;
+	} else {
+		for (int i = 0; i < s->count && s->fmatch < MAX_SUBITEMS; i++)
+			if (contains_ci(s->labels[i], s->filter))
+				s->fmap[s->fmatch++] = i;
+	}
+	s->page_max = s->fmatch > PER_PAGE ? (s->fmatch - 1) / PER_PAGE : 0;
 }
 
 static void build_game_command(int idx) {
@@ -125,18 +188,64 @@ static void build_game_command(int idx) {
 		"%s WINEPREFIX=%s PROTONPATH=%s umu-run %s",
 		game_extra[idx] ? game_extra[idx] : "",
 		prefix_expanded, proton_expanded, exe_expanded);
-	game_commands[idx] = game_cmd_buf[idx];
 }
 
-static void read_games_config(void) {
-	char *home = getenv("HOME");
-	if (!home) return;
-	char path[1024];
-	snprintf(path, sizeof(path), "%s/.config/bytemenu/games.conf", home);
-	FILE *f = fopen(path, "r");
+static void sort_games(struct submenu *s) {
+	for (int i = 0; i < s->count - 1; i++) {
+		for (int j = i + 1; j < s->count; j++) {
+			if (strcmp(s->labels[i], s->labels[j]) > 0) {
+				char *t;
+				t = s->labels[i]; s->labels[i] = s->labels[j]; s->labels[j] = t;
+				t = s->commands[i]; s->commands[i] = s->commands[j]; s->commands[j] = t;
+				t = game_exe[i]; game_exe[i] = game_exe[j]; game_exe[j] = t;
+				t = game_proton[i]; game_proton[i] = game_proton[j]; game_proton[j] = t;
+				t = game_extra[i]; game_extra[i] = game_extra[j]; game_extra[j] = t;
+			}
+		}
+	}
+}
+
+/* parse "label|command" lines from f into s; __GEN__ items become child submenus */
+static void parse_items(struct submenu *s, FILE *f) {
+	char line[512];
+	while (fgets(line, sizeof(line), f) && s->count < MAX_SUBITEMS) {
+		line[strcspn(line, "\n")] = 0;
+		if (!line[0] || line[0] == '#') continue;
+		char *p = strchr(line, '|');
+		if (!p) continue;
+		*p++ = 0;
+		while (*p == ' ') p++;
+		if (!line[0] || !*p) continue;
+		s->labels[s->count] = strdup(line);
+		if (!strncmp(p, "__GEN__ ", 8)) {
+			s->commands[s->count] = NULL;
+			struct submenu *c = new_submenu(line);
+			if (c) {
+				c->gen_cmd = strdup(p + 8);
+				c->generated = 1;
+			}
+			s->children[s->count] = c;
+		} else {
+			s->commands[s->count] = strdup(p);
+			s->children[s->count] = NULL;
+		}
+		s->count++;
+	}
+}
+
+static void load_simple(struct submenu *s) {
+	FILE *f = fopen(s->path, "r");
+	if (!f) return;
+	parse_items(s, f);
+	fclose(f);
+	s->page_max = s->count > PER_PAGE ? (s->count - 1) / PER_PAGE : 0;
+}
+
+static void load_games(struct submenu *s) {
+	FILE *f = fopen(s->path, "r");
 	if (!f) return;
 	char line[512];
-	while (fgets(line, sizeof(line), f) && game_count < MAX_GAMES) {
+	while (fgets(line, sizeof(line), f) && s->count < MAX_SUBITEMS) {
 		line[strcspn(line, "\n")] = 0;
 		if (!line[0] || line[0] == '#') continue;
 		char *p = strchr(line, '|');
@@ -164,182 +273,200 @@ static void read_games_config(void) {
 		while (*exe_path == ' ') exe_path++;
 		while (*proton_path == ' ') proton_path++;
 		if (!line[0] || !*p || !*exe_path) continue;
-		game_labels[game_count] = strdup(line);
-		game_exe[game_count] = strdup(p);
-		game_proton[game_count] = strdup(proton_path);
-		game_extra[game_count] = extra ? strdup(extra) : NULL;
-		game_commands[game_count] = game_cmd_buf[game_count];
-		if (!game_labels[game_count] || !game_exe[game_count] ||
-		    !game_proton[game_count]) {
-			free(game_labels[game_count]);
-			free(game_exe[game_count]);
-			free(game_proton[game_count]);
-			free(game_extra[game_count]);
+		int idx = s->count;
+		s->labels[idx] = strdup(line);
+		game_exe[idx] = strdup(p);
+		game_proton[idx] = strdup(proton_path);
+		game_extra[idx] = extra ? strdup(extra) : NULL;
+		s->commands[idx] = game_cmd_buf[idx];
+		s->children[idx] = NULL;
+		if (!s->labels[idx] || !game_exe[idx] || !game_proton[idx]) {
+			free(s->labels[idx]);
+			free(game_exe[idx]);
+			free(game_proton[idx]);
+			free(game_extra[idx]);
 			continue;
 		}
-		build_game_command(game_count);
-		game_count++;
+		build_game_command(idx);
+		s->count++;
 	}
 	fclose(f);
-	sort_games();
-	game_page_max = game_count > PER_PAGE ? (game_count - 1) / PER_PAGE : 0;
+	sort_games(s);
+	s->page_max = s->count > PER_PAGE ? (s->count - 1) / PER_PAGE : 0;
 }
 
-static void draw_main(void) {
-	XSetForeground(dpy, gc, c_bg);
-	XFillRectangle(dpy, win, gc, 0, 0, WIN_W, win_h);
-
-	const char *hdr = "b y t e m e n u";
-	int tw = XTextWidth(xfont, hdr, strlen(hdr));
-	XSetForeground(dpy, gc, c_dim);
-	XDrawString(dpy, win, gc, (WIN_W - tw) / 2, 28, hdr, strlen(hdr));
-
-	XSetForeground(dpy, gc, c_border);
-	XFillRectangle(dpy, win, gc, 20, 42, WIN_W - 40, 2);
-	XFillRectangle(dpy, win, gc, 0, 0, WIN_W, BORDER_W);
-	XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, WIN_W, BORDER_W);
-	XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, win_h);
-	XFillRectangle(dpy, win, gc, WIN_W - BORDER_W, 0, BORDER_W, win_h);
-
-	int y = 56;
-	for (int i = 0; i < count; i++) {
-		if (i == sel) {
-			XSetForeground(dpy, gc, c_hi);
-			XDrawString(dpy, win, gc, 12, y + 20, ">", 1);
-		}
-		XSetForeground(dpy, gc, i == sel ? c_hi : c_fg);
-		XDrawString(dpy, win, gc, 28, y + 20, labels[i], strlen(labels[i]));
-		y += ITEM_H;
+static void build_categories(void) {
+	char *home = getenv("HOME");
+	if (!home) return;
+	for (int i = 0; i < (int)(sizeof(catdefs) / sizeof(catdefs[0])); i++) {
+		struct submenu *s = &cats[cat_count];
+		snprintf(s->path, sizeof(s->path), "%s/.config/bytemenu/%s", home, catdefs[i].file);
+		struct stat st;
+		if (stat(s->path, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+		s->label = strdup(catdefs[i].label);
+		snprintf(s->title, sizeof(s->title), "%s", catdefs[i].title);
+		s->games = catdefs[i].games;
+		cat_count++;
 	}
-
-	const char *ftr = "j/k  enter  esc";
-	tw = XTextWidth(xfont, ftr, strlen(ftr));
-	XSetForeground(dpy, gc, c_dim);
-	XDrawString(dpy, win, gc, (WIN_W - tw)/2, win_h - 20, ftr, strlen(ftr));
-
-	XSync(dpy, False);
 }
 
-static void draw_games(void) {
+static void load_categories(void) {
+	for (int i = 0; i < cat_count; i++) {
+		if (cats[i].games) load_games(&cats[i]);
+		else load_simple(&cats[i]);
+	}
+}
+
+static void build_main_menu(void) {
+	memset(&mainmenu, 0, sizeof(mainmenu));
+	snprintf(mainmenu.title, sizeof(mainmenu.title), "b y t e m e n u");
+	if (cat_count > 0) {
+		for (int i = 0; i < cat_count; i++) {
+			mainmenu.labels[i] = cats[i].label;
+			mainmenu.commands[i] = NULL;
+			mainmenu.children[i] = &cats[i];
+		}
+		mainmenu.count = cat_count;
+	} else {
+		mainmenu.labels[0] = "Terminal"; mainmenu.commands[0] = "st";
+		mainmenu.labels[1] = "Browser";  mainmenu.commands[1] = "firefox";
+		mainmenu.labels[2] = "Files";    mainmenu.commands[2] = "st -e ranger";
+		mainmenu.count = 3;
+	}
+	mainmenu.page_max = mainmenu.count > PER_PAGE ? (mainmenu.count - 1) / PER_PAGE : 0;
+}
+
+static void gen_submenu(struct submenu *s) {
+	if (!s->generated || !s->gen_cmd) return;
+	FILE *p = popen(s->gen_cmd, "r");
+	if (p) {
+		parse_items(s, p);
+		pclose(p);
+		s->page_max = s->count > PER_PAGE ? (s->count - 1) / PER_PAGE : 0;
+	}
+	s->generated = 0;
+}
+
+static void draw(void);
+
+static void enter_submenu(struct submenu *s) {
+	if (nav_depth >= MAX_NAV) return;
+	if (s->generated) gen_submenu(s);
+	s->filter[0] = 0;
+	recompute_filter(s);
+	s->sel = 0;
+	s->page = 0;
+	nav[nav_depth++] = s;
+	draw();
+}
+
+static void draw_submenu(struct submenu *s) {
 	XSetForeground(dpy, gc, c_bg);
-	XFillRectangle(dpy, win, gc, 0, 0, GAME_W, win_h);
+	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, win_h);
 
-	const char *hdr = "b y t e g a m e s";
-	int tw = XTextWidth(xfont, hdr, strlen(hdr));
-	XSetForeground(dpy, gc, c_dim);
-	XDrawString(dpy, win, gc, (GAME_W - tw) / 2, 28, hdr, strlen(hdr));
+	const char *hdr = s->title[0] ? s->title : "b y t e m e n u";
+	int tw = appfont_width(afont, hdr, (int)strlen(hdr));
+	appfont_draw(afont, win, gc, &fc_dim, c_dim, (PAPER_W - tw) / 2, 36, hdr, (int)strlen(hdr));
 
 	XSetForeground(dpy, gc, c_border);
-	XFillRectangle(dpy, win, gc, 20, 42, GAME_W - 40, 2);
-	XFillRectangle(dpy, win, gc, 0, 0, GAME_W, BORDER_W);
-	XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, GAME_W, BORDER_W);
+	XFillRectangle(dpy, win, gc, 20, 48, PAPER_W - 40, 2);
+	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, BORDER_W);
+	XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
 	XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, win_h);
-	XFillRectangle(dpy, win, gc, GAME_W - BORDER_W, 0, BORDER_W, win_h);
+	XFillRectangle(dpy, win, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
 
-	/* draw column separator - spans exactly the items area */
-	XSetForeground(dpy, gc, c_border);
-	XFillRectangle(dpy, win, gc, GAME_W / 2 - 1, 56, 2, PAGE_COL * ITEM_H);
-
-	/* calculate which games to show */
-	int start = game_page * PER_PAGE;
-	int left_count = 0, right_count = 0;
-	for (int i = 0; i < PER_PAGE && (start + i) < game_count; i++) {
-		if (i < PAGE_COL) left_count++;
-		else right_count++;
+	int page_count = s->fmatch - s->page * PER_PAGE;
+	if (page_count > PER_PAGE) page_count = PER_PAGE;
+	if (page_count < 0) page_count = 0;
+	int block = page_count * ITEM_H;
+	int top = 60 + ((win_h - 60 - 50) - block) / 2;
+	for (int i = 0; i < page_count; i++) {
+		int idx = s->fmap[s->page * PER_PAGE + i];
+		int y = top + i * ITEM_H;
+		int is_sel = (i == s->sel);
+		const char *lbl = s->labels[idx];
+		tw = appfont_width(afont, lbl, (int)strlen(lbl));
+		if (is_sel)
+			appfont_draw(afont, win, gc, &fc_hi, c_hi, (PAPER_W - tw) / 2 - 20, y + 22, ">", 1);
+		appfont_draw(afont, win, gc, is_sel ? &fc_hi : &fc_fg,
+		             is_sel ? c_hi : c_fg, (PAPER_W - tw) / 2, y + 22, lbl, (int)strlen(lbl));
 	}
 
-	/* draw left column */
-	int y = 56;
-	for (int i = 0; i < left_count; i++) {
-		int idx = start + i;
-		int is_sel = (game_col == 0 && game_sel == i);
-		if (is_sel) {
-			XSetForeground(dpy, gc, c_hi);
-			XDrawString(dpy, win, gc, 12, y + 20, ">", 1);
+	if (s->fmatch == 0) {
+		const char *empty = s->filter[0] ? "no match" : "(empty)";
+		tw = appfont_width(afont, empty, (int)strlen(empty));
+		appfont_draw(afont, win, gc, &fc_dim, c_dim, (PAPER_W - tw) / 2, win_h / 2, empty, (int)strlen(empty));
+	}
+
+	char ftr[96];
+	if (s->filter[0]) {
+		if (s->page_max > 0)
+			snprintf(ftr, sizeof(ftr), "find: %s  [%d/%d]", s->filter, s->page + 1, s->page_max + 1);
+		else
+			snprintf(ftr, sizeof(ftr), "find: %s", s->filter);
+	} else if (s->page_max > 0) {
+		snprintf(ftr, sizeof(ftr), "[%d/%d]   j/k  ]/[  esc", s->page + 1, s->page_max + 1);
+	} else {
+		snprintf(ftr, sizeof(ftr), "type to search  esc");
+	}
+	tw = appfont_width(afont, ftr, (int)strlen(ftr));
+	if (tw > PAPER_W - 16) {
+		/* trim from the front to fit */
+		size_t n = strlen(ftr);
+		while (tw > PAPER_W - 16 && n > 0) {
+			memmove(ftr, ftr + 1, n);
+			n--;
+			tw = appfont_width(afont, ftr, (int)n);
 		}
-		XSetForeground(dpy, gc, is_sel ? c_hi : c_fg);
-		XDrawString(dpy, win, gc, 28, y + 20, game_labels[idx], strlen(game_labels[idx]));
-		y += ITEM_H;
 	}
-
-	/* draw right column */
-	y = 56;
-	for (int i = 0; i < right_count; i++) {
-		int idx = start + PAGE_COL + i;
-		int is_sel = (game_col == 1 && game_sel == i);
-		if (is_sel) {
-			XSetForeground(dpy, gc, c_hi);
-			XDrawString(dpy, win, gc, GAME_W / 2 + 12, y + 20, ">", 1);
-		}
-		XSetForeground(dpy, gc, is_sel ? c_hi : c_fg);
-		XDrawString(dpy, win, gc, GAME_W / 2 + 28, y + 20, game_labels[idx], strlen(game_labels[idx]));
-		y += ITEM_H;
-	}
-
-	/* page indicator */
-	if (game_page_max > 0) {
-		char page_str[32];
-		snprintf(page_str, sizeof(page_str), "[%d/%d]", game_page + 1, game_page_max + 1);
-		int page_tw = XTextWidth(xfont, page_str, strlen(page_str));
-		XSetForeground(dpy, gc, c_dim);
-		XDrawString(dpy, win, gc, GAME_W - page_tw - 12, win_h - 20, page_str, strlen(page_str));
-	}
+	appfont_draw(afont, win, gc, &fc_dim, c_dim, (PAPER_W - tw) / 2, win_h - 22, ftr, (int)strlen(ftr));
 
 	XSync(dpy, False);
 }
 
 static void draw(void) {
-	if (submenu)
-		draw_games();
-	else
-		draw_main();
+	draw_submenu(nav[nav_depth - 1]);
 }
 
-static void read_config(void) {
-	char *home = getenv("HOME");
-	if (!home) return;
-	char path[1024];
-	snprintf(path, sizeof(path), "%s/.config/bytemenu/menu.conf", home);
-	FILE *f = fopen(path, "r");
-	if (!f) return;
-	char line[512];
-	while (fgets(line, sizeof(line), f) && count < MAX_ITEMS) {
-		line[strcspn(line, "\n")] = 0;
-		if (!line[0] || line[0] == '#') continue;
-		char *p = strchr(line, '|');
-		if (!p) continue;
-		*p++ = 0;
-		while (*p == ' ') p++;
-		if (!line[0] || !*p) continue;
-		labels[count] = strdup(line);
-		commands[count] = strdup(p);
-		count++;
-	}
-	fclose(f);
-}
-
-static void launch(void) {
-	if (!commands[sel]) return;
+static void launch_cmd(const char *cmd) {
+	if (!cmd) return;
 	pid_t pid = fork();
 	if (pid < 0) return;
 	if (pid == 0) {
 		setsid();
-		execl("/bin/sh", "/bin/sh", "-c", commands[sel], NULL);
+		execl("/bin/sh", "/bin/sh", "-c", cmd, NULL);
 		_exit(1);
 	}
 }
 
-static void launch_game(int idx) {
-	if (idx < 0 || idx >= game_count || !game_commands[idx]) return;
+static void launch_game(struct submenu *s, int idx) {
+	if (idx < 0 || idx >= s->count || !s->commands[idx]) return;
 	pid_t pid = fork();
 	if (pid < 0) return;
 	if (pid == 0) {
 		setsid();
 		int fd = open("/dev/null", O_RDWR);
 		if (fd >= 0) { dup2(fd, STDOUT_FILENO); dup2(fd, STDERR_FILENO); close(fd); }
-		execl("/bin/sh", "/bin/sh", "-c", game_commands[idx], NULL);
+		execl("/bin/sh", "/bin/sh", "-c", s->commands[idx], NULL);
 		_exit(1);
 	}
+}
+
+static void free_tree(struct submenu *s) {
+	for (int j = 0; j < s->count; j++) {
+		if (s->children[j]) {
+			free_tree(s->children[j]);
+			free(s->children[j]);
+		} else if (s->games) {
+			free(game_exe[j]);
+			free(game_proton[j]);
+			free(game_extra[j]);
+		} else if (s->commands[j]) {
+			free(s->commands[j]);
+		}
+		free(s->labels[j]);
+	}
+	free(s->gen_cmd);
 }
 
 int main(void) {
@@ -386,20 +513,10 @@ int main(void) {
 	signal(SIGQUIT, sigcleanup);
 	signal(SIGPIPE, sigcleanup);
 
-	read_config();
-	if (!count) {
-		labels[0] = strdup("Terminal");   commands[0] = strdup("st");
-		labels[1] = strdup("Browser");    commands[1] = strdup("firefox");
-		labels[2] = strdup("Files");      commands[2] = strdup("st -e ranger");
-		count = 3;
-	}
-
-	read_games_config();
-	if (game_count > 0 && count < MAX_ITEMS) {
-		labels[count] = strdup("Games");
-		commands[count] = strdup("__GAMES__");
-		count++;
-	}
+	build_categories();
+	load_categories();
+	build_main_menu();
+	recompute_filter(&mainmenu);
 
 	dpy = XOpenDisplay(NULL);
 	if (!dpy) return 1;
@@ -408,18 +525,21 @@ int main(void) {
 	sw = DisplayWidth(dpy, scr);
 	sh = DisplayHeight(dpy, scr);
 
-	xfont = XLoadQueryFont(dpy, "fixed");
-	if (!xfont) return 1;
+	afont = appfont_open(dpy, appfont_sharedname());
+	if (!afont) return 1;
 
 	c_bg     = getcol("#282828");
 	c_fg     = getcol("#ebdbb2");
 	c_hi     = getcol("#d65d0e");
 	c_border = getcol("#689d6a");
 	c_dim    = getcol("#a89984");
+	appfont_alloccolor(dpy, "#ebdbb2", &fc_fg);
+	appfont_alloccolor(dpy, "#d65d0e", &fc_hi);
+	appfont_alloccolor(dpy, "#a89984", &fc_dim);
 
-	win_h = 44 + count * ITEM_H + 34;
-	if (win_h < 200) win_h = 200;
+	win_h = PAPER_H;
 	if (win_h > sh - 40) win_h = sh - 40;
+	if (win_h < 240) win_h = 240;
 
 	XSetWindowAttributes wa = {
 		.override_redirect = True,
@@ -427,13 +547,15 @@ int main(void) {
 		.event_mask = ExposureMask | KeyPressMask
 	};
 	win = XCreateWindow(dpy, root,
-		(sw - WIN_W) / 2, (sh - win_h) / 2,
-		WIN_W, win_h, 0,
+		(sw - PAPER_W) / 2, (sh - win_h) / 2,
+		PAPER_W, win_h, 0,
 		DefaultDepth(dpy, scr), CopyFromParent,
 		DefaultVisual(dpy, scr),
 		CWOverrideRedirect | CWBackPixel | CWEventMask, &wa);
 	gc = XCreateGC(dpy, root, 0, NULL);
-	XSetFont(dpy, gc, xfont->fid);
+
+	nav[0] = &mainmenu;
+	nav_depth = 1;
 
 	XMapRaised(dpy, win);
 	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
@@ -442,117 +564,94 @@ int main(void) {
 		None, None, CurrentTime);
 
 	XEvent ev;
-	while (1) {
+	int done = 0;
+	while (!done) {
 		XNextEvent(dpy, &ev);
 		if (ev.type == Expose && ev.xexpose.count == 0)
 			draw();
 		else if (ev.type == KeyPress) {
 			KeySym ks = XLookupKeysym(&ev.xkey, 0);
+			char lbuf[32];
+			int llen = XLookupString(&ev.xkey, lbuf, sizeof(lbuf), NULL, NULL);
+			struct submenu *s = nav[nav_depth - 1];
 
-			if (submenu) {
-				/* games submenu */
-				int page_count = game_count - game_page * PER_PAGE;
-				if (page_count > PER_PAGE) page_count = PER_PAGE;
-				int left_count = page_count < PAGE_COL ? page_count : PAGE_COL;
-				int right_count = page_count - left_count;
-
-				if (ks == XK_Escape || ks == XK_q) {
-					submenu = 0;
-					/* resize window back to main menu size */
-					win_h = 44 + count * ITEM_H + 28;
-					if (win_h < 200) win_h = 200;
-					if (win_h > sh - 40) win_h = sh - 40;
-					XMoveResizeWindow(dpy, win,
-						(sw - WIN_W) / 2, (sh - win_h) / 2,
-						WIN_W, win_h);
+			if (ks == XK_Escape || ks == XK_q) {
+				if (s->filter[0]) {
+					s->filter[0] = 0;
+					recompute_filter(s);
+					s->sel = 0;
+					s->page = 0;
 					draw();
-					continue;
+				} else if (nav_depth > 1) {
+					nav_depth--;
+					draw();
+				} else {
+					done = 1;
 				}
-				if (ks == XK_Return) {
-					int idx = game_page * PER_PAGE + game_col * PAGE_COL + game_sel;
-					if (idx < game_count) {
-						launch_game(idx);
-						break;
+			} else if (ks == XK_Return) {
+				int idx = s->page * PER_PAGE + s->sel;
+				if (idx >= 0 && idx < s->fmatch) {
+					int real = s->fmap[idx];
+					if (s->children[real]) {
+						enter_submenu(s->children[real]);
+					} else if (s->games) {
+						launch_game(s, real);
+						done = 1;
+					} else if (s->commands[real]) {
+						launch_cmd(s->commands[real]);
+						done = 1;
 					}
 				}
-				if (ks == XK_j || ks == XK_Down) {
-					int max_sel = game_col == 0 ? left_count - 1 : right_count - 1;
-					if (max_sel < 0) max_sel = 0;
-					if (game_sel < max_sel) { game_sel++; draw(); }
+			} else if (ks == XK_BackSpace) {
+				if (s->filter[0]) {
+					s->filter[strlen(s->filter) - 1] = 0;
+					recompute_filter(s);
+					if (s->sel >= s->fmatch) s->sel = s->fmatch ? s->fmatch - 1 : 0;
+					if (s->page > s->page_max) s->page = s->page_max;
+					if (s->sel < 0) s->sel = 0;
+					if (s->page < 0) s->page = 0;
+					draw();
 				}
-				if (ks == XK_k || ks == XK_Up) {
-					if (game_sel > 0) { game_sel--; draw(); }
+			} else if (ks == XK_Down) {
+				int page_count = s->fmatch - s->page * PER_PAGE;
+				if (page_count > PER_PAGE) page_count = PER_PAGE;
+				if (s->sel < page_count - 1) { s->sel++; draw(); }
+			} else if (ks == XK_Up) {
+				if (s->sel > 0) { s->sel--; draw(); }
+			} else if (!s->filter[0] && ks == XK_j) {
+				int page_count = s->fmatch - s->page * PER_PAGE;
+				if (page_count > PER_PAGE) page_count = PER_PAGE;
+				if (s->sel < page_count - 1) { s->sel++; draw(); }
+			} else if (!s->filter[0] && ks == XK_k) {
+				if (s->sel > 0) { s->sel--; draw(); }
+			} else if (ks == XK_bracketright || ks == XK_Tab ||
+			           (!s->filter[0] && (ks == XK_l || ks == XK_Right))) {
+				if (s->page < s->page_max) { s->page++; s->sel = 0; draw(); }
+			} else if (ks == XK_bracketleft ||
+			           (!s->filter[0] && (ks == XK_h || ks == XK_Left))) {
+				if (s->page > 0) { s->page--; s->sel = 0; draw(); }
+			} else if (llen == 1 && (isprint((unsigned char)lbuf[0]) || lbuf[0] == ' ')) {
+				if (strlen(s->filter) < sizeof(s->filter) - 1) {
+					size_t n = strlen(s->filter);
+					s->filter[n] = lbuf[0];
+					s->filter[n + 1] = 0;
+					recompute_filter(s);
+					if (s->sel >= s->fmatch) s->sel = s->fmatch ? s->fmatch - 1 : 0;
+					if (s->page > s->page_max) s->page = s->page_max;
+					if (s->sel < 0) s->sel = 0;
+					if (s->page < 0) s->page = 0;
+					draw();
 				}
-				if (ks == XK_l || ks == XK_Right) {
-					if (right_count > 0) {
-						game_col = 1;
-						if (game_sel >= right_count) game_sel = right_count - 1;
-						if (game_sel < 0) game_sel = 0;
-						draw();
-					}
-				}
-				if (ks == XK_h || ks == XK_Left) {
-					if (game_col == 1) {
-						game_col = 0;
-						if (game_sel >= left_count) game_sel = left_count - 1;
-						if (game_sel < 0) game_sel = 0;
-						draw();
-					}
-				}
-				if (ks == XK_bracketright || ks == XK_Tab) {
-					if (game_page < game_page_max) {
-						game_page++;
-						game_col = 0;
-						game_sel = 0;
-						draw();
-					}
-				}
-				if (ks == XK_bracketleft) {
-					if (game_page > 0) {
-						game_page--;
-						game_col = 0;
-						game_sel = 0;
-						draw();
-					}
-				}
-			} else {
-				/* main menu */
-				if (ks == XK_Escape || ks == XK_q) break;
-				if (ks == XK_Return) {
-					if (!strcmp(commands[sel], "__GAMES__")) {
-						submenu = 1;
-						game_col = 0;
-						game_sel = 0;
-						game_page = 0;
-
-					/* resize window for games submenu */
-					win_h = 44 + PAGE_COL * ITEM_H + 28;
-					XMoveResizeWindow(dpy, win,
-						(sw - GAME_W) / 2, (sh - win_h) / 2,
-						GAME_W, win_h);
-						draw();
-					} else {
-						launch();
-						break;
-					}
-				}
-				if ((ks == XK_j || ks == XK_Down) && sel < count-1) { sel++; draw(); }
-				if ((ks == XK_k || ks == XK_Up)   && sel > 0)        { sel--; draw(); }
 			}
 		}
 	}
 
 	XUngrabPointer(dpy, CurrentTime);
 	XFreeGC(dpy, gc);
-	XFreeFont(dpy, xfont);
+	appfont_close(afont);
 	XDestroyWindow(dpy, win);
 	XCloseDisplay(dpy);
-	for (int i = 0; i < count; i++) { free(labels[i]); free(commands[i]); }
-	for (int i = 0; i < game_count; i++) {
-		free(game_labels[i]);
-		free(game_exe[i]);
-		free(game_proton[i]);
-		free(game_extra[i]);
-	}
+	for (int i = 0; i < cat_count; i++)
+		free_tree(&cats[i]);
 	return 0;
 }

@@ -10,16 +10,16 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <time.h>
+#include "appfont.h"
 
 static Display *dpy;
 static Window root, win;
 static GC gc;
-static XFontStruct *xfont;
+static AppFont *afont;
 static int bh, sw;
 static char msg[512] = "";
 static time_t notify_time = 0;
 
-static const char *font = "fixed";
 static const char *bg = "#282828";
 static const char *fg = "#ebdbb2";
 static const char *border = "#689d6a";
@@ -29,7 +29,7 @@ static const char *fifo_path = "/tmp/bytify.fifo";
 #define POPUP_MARGIN  12
 #define HIDE_AFTER  3
 #define MAXLINES  5
-#define LINE_MAX  256
+#define MY_LINE_MAX 256
 #define TXT_PAD  8
 
 static unsigned long
@@ -43,6 +43,7 @@ getcol(const char *c)
 }
 
 static unsigned long cbg, cfg, cborder;
+static XftColor fc_fg;
 
 static void
 draw(void)
@@ -54,11 +55,11 @@ draw(void)
 	}
 
 	/* wrap message into at most MAXLINES centered lines */
-	char lines[MAXLINES][LINE_MAX];
+	char lines[MAXLINES][MY_LINE_MAX];
 	int nlines = 0;
 	{
 		int maxpx = POPUP_W - 2 * TXT_PAD - 2;
-		char line[LINE_MAX];
+		char line[MY_LINE_MAX];
 		size_t linelen = 0;
 		const char *p = msg;
 		int more = 0;
@@ -69,15 +70,15 @@ draw(void)
 			while (*p && *p != ' ') p++;
 			int wlen = (int)(p - start);
 			/* clamp word to remaining room in line (byte bound) */
-			if (wlen > (int)(LINE_MAX - 1) - (int)linelen - (linelen ? 1 : 0))
-				wlen = (int)(LINE_MAX - 1) - (int)linelen - (linelen ? 1 : 0);
+			if (wlen > (int)(MY_LINE_MAX - 1) - (int)linelen - (linelen ? 1 : 0))
+				wlen = (int)(MY_LINE_MAX - 1) - (int)linelen - (linelen ? 1 : 0);
 			if (wlen < 0) wlen = 0;
-			int ww = XTextWidth(xfont, start, wlen);
-			int sepw = linelen ? XTextWidth(xfont, " ", 1) : 0;
+			int ww = appfont_width(afont, start, wlen);
+			int sepw = linelen ? appfont_width(afont, " ", 1) : 0;
 			if (linelen && (int)linelen + sepw + ww > maxpx) {
 				line[linelen] = '\0';
-				strncpy(lines[nlines], line, LINE_MAX - 1);
-				lines[nlines][LINE_MAX - 1] = '\0';
+				strncpy(lines[nlines], line, MY_LINE_MAX - 1);
+				lines[nlines][MY_LINE_MAX - 1] = '\0';
 				nlines++;
 				linelen = 0;
 				if (nlines == MAXLINES) {
@@ -92,21 +93,21 @@ draw(void)
 		}
 		if (nlines < MAXLINES && linelen) {
 			line[linelen] = '\0';
-			strncpy(lines[nlines], line, LINE_MAX - 1);
-			lines[nlines][LINE_MAX - 1] = '\0';
+			strncpy(lines[nlines], line, MY_LINE_MAX - 1);
+			lines[nlines][MY_LINE_MAX - 1] = '\0';
 			nlines++;
 		}
 		if (nlines == MAXLINES && more) {
 			/* trim last line to fit "..." */
 			char *l = lines[nlines - 1];
-			int ellw = XTextWidth(xfont, "...", 3);
-			int lw = XTextWidth(xfont, l, strlen(l));
+			int ellw = appfont_width(afont, "...", 3);
+			int lw = appfont_width(afont, l, (int)strlen(l));
 			while (lw + ellw > maxpx && strlen(l) > 0) {
 				l[strlen(l) - 1] = '\0';
-				lw = XTextWidth(xfont, l, strlen(l));
+				lw = appfont_width(afont, l, (int)strlen(l));
 			}
-			if (strlen(l) > (size_t)(LINE_MAX - 4))
-				l[LINE_MAX - 4] = '\0';
+			if (strlen(l) > (size_t)(MY_LINE_MAX - 4))
+				l[MY_LINE_MAX - 4] = '\0';
 			strcat(l, "...");
 		}
 	}
@@ -123,12 +124,12 @@ draw(void)
 	XFillRectangle(dpy, win, gc, 1, 1, POPUP_W - 2, bh - 2);
 	XSetForeground(dpy, gc, cfg);
 
-	int lineh = xfont->ascent + xfont->descent;
-	int ty = (bh - nlines * lineh) / 2 + xfont->ascent;
+	int lineh = afont->height;
+	int ty = (bh - nlines * lineh) / 2 + afont->ascent;
 	for (int i = 0; i < nlines; i++) {
-		int tw = XTextWidth(xfont, lines[i], strlen(lines[i]));
+		int tw = appfont_width(afont, lines[i], (int)strlen(lines[i]));
 		int tx = (POPUP_W - tw) / 2;
-		XDrawString(dpy, win, gc, tx, ty + i * lineh, lines[i], strlen(lines[i]));
+		appfont_draw(afont, win, gc, &fc_fg, cfg, tx, ty + i * lineh, lines[i], (int)strlen(lines[i]));
 	}
 	XSync(dpy, 0);
 }
@@ -151,16 +152,16 @@ main(void)
 	root = RootWindow(dpy, screen);
 	sw = DisplayWidth(dpy, screen);
 
-	xfont = XLoadQueryFont(dpy, font);
-	if (!xfont) xfont = XLoadQueryFont(dpy, "fixed");
-	if (!xfont) return 1;
-	bh = (xfont->ascent + xfont->descent) * MAXLINES + 12;
+	afont = appfont_open(dpy, appfont_sharedname());
+	if (!afont) return 1;
+	bh = afont->height * MAXLINES + 12;
 
 	gc = XCreateGC(dpy, root, 0, NULL);
 
 	cbg = getcol(bg);
 	cfg = getcol(fg);
 	cborder = getcol(border);
+	appfont_alloccolor(dpy, fg, &fc_fg);
 
 	XSetWindowAttributes wa = {
 		.override_redirect = True,
@@ -231,7 +232,7 @@ main(void)
 
 	close(fd);
 	XDestroyWindow(dpy, win);
-	XFreeFont(dpy, xfont);
+	appfont_close(afont);
 	XFreeGC(dpy, gc);
 	XCloseDisplay(dpy);
 	return 0;

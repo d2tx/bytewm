@@ -10,6 +10,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include "appfont.h"
 
 #define MENU_W   300
 #define ITEM_H   30
@@ -77,8 +78,8 @@ static void save_ppm(Display *dpy, XImage *img, int w, int h) {
 static void countdown(Display *dpy, Window root, int screen) {
 	int sw = DisplayWidth(dpy, screen);
 	int sh = DisplayHeight(dpy, screen);
-	XFontStruct *cfont = XLoadQueryFont(dpy, "fixed");
-	if (!cfont) return;
+	AppFont *afont = appfont_open(dpy, appfont_sharedname());
+	if (!afont) return;
 	unsigned long c_bg = getcol(dpy, "#282828");
 	XSetWindowAttributes cwa = { .override_redirect = True, .background_pixel = c_bg };
 	Window cwin = XCreateWindow(dpy, root, (sw-40)/2, (sh-30)/2, 40, 30, 2,
@@ -86,18 +87,18 @@ static void countdown(Display *dpy, Window root, int screen) {
 		CWOverrideRedirect | CWBackPixel, &cwa);
 	XSetWindowBorder(dpy, cwin, getcol(dpy, "#689d6a"));
 	GC cgc = XCreateGC(dpy, cwin, 0, NULL);
-	XSetFont(dpy, cgc, cfont->fid);
 	XMapRaised(dpy, cwin);
 	XSetInputFocus(dpy, cwin, RevertToParent, CurrentTime);
 	const char *cols[] = { "#cc241d", "#d65d0e", "#689d6a" };
+	XftColor fc;
 	for (int i = 3; i > 0; i--) {
 		char buf[2] = { '0' + i, '\0' };
 		XSetForeground(dpy, cgc, c_bg);
 		XFillRectangle(dpy, cwin, cgc, 0, 0, 40, 30);
-		XSetForeground(dpy, cgc, getcol(dpy, cols[3-i]));
-		int tw = XTextWidth(cfont, buf, 1);
-		int th = cfont->ascent + cfont->descent;
-		XDrawString(dpy, cwin, cgc, (40-tw)/2, (30+th)/2, buf, 1);
+		appfont_alloccolor(dpy, cols[3-i], &fc);
+		int tw = appfont_width(afont, buf, 1);
+		appfont_draw(afont, cwin, cgc, &fc, getcol(dpy, cols[3-i]),
+			(40-tw)/2, (30+afont->height)/2, buf, 1);
 		XFlush(dpy);
 		sleep(1);
 	}
@@ -107,22 +108,22 @@ static void countdown(Display *dpy, Window root, int screen) {
 	sleep(1);
 	XDestroyWindow(dpy, cwin);
 	XFreeGC(dpy, cgc);
-	XFreeFont(dpy, cfont);
+	appfont_close(afont);
 	XSync(dpy, False);
 }
 
-static void draw_menu(Display *dpy, Window win, GC gc, XFontStruct *xfont,
+static void draw_menu(Display *dpy, Window win, GC gc, AppFont *afont,
 	unsigned long c_bg, unsigned long c_fg, unsigned long c_hi,
 	unsigned long c_dim, unsigned long c_border,
+	XftColor *fc_fg, XftColor *fc_hi, XftColor *fc_dim,
 	char **labels, int count, int sel, int win_h)
 {
 	XSetForeground(dpy, gc, c_bg);
 	XFillRectangle(dpy, win, gc, 0, 0, MENU_W, win_h);
 
-	XSetForeground(dpy, gc, c_dim);
 	const char *hdr = "b y t e s n a p";
-	int tw = XTextWidth(xfont, hdr, strlen(hdr));
-	XDrawString(dpy, win, gc, (MENU_W - tw) / 2, 28, hdr, strlen(hdr));
+	int tw = appfont_width(afont, hdr, (int)strlen(hdr));
+	appfont_draw(afont, win, gc, fc_dim, c_dim, (MENU_W - tw) / 2, 28, hdr, (int)strlen(hdr));
 
 	XSetForeground(dpy, gc, c_border);
 	XFillRectangle(dpy, win, gc, 20, 42, MENU_W - 40, 1);
@@ -133,19 +134,16 @@ static void draw_menu(Display *dpy, Window win, GC gc, XFontStruct *xfont,
 
 	int y = 56;
 	for (int i = 0; i < count; i++) {
-		if (i == sel) {
-			XSetForeground(dpy, gc, c_hi);
-			XDrawString(dpy, win, gc, 12, y + 20, ">", 1);
-		}
-		XSetForeground(dpy, gc, i == sel ? c_hi : c_fg);
-		XDrawString(dpy, win, gc, 28, y + 20, labels[i], strlen(labels[i]));
+		if (i == sel)
+			appfont_draw(afont, win, gc, fc_hi, c_hi, 12, y + 20, ">", 1);
+		appfont_draw(afont, win, gc, i == sel ? fc_hi : fc_fg,
+		             i == sel ? c_hi : c_fg, 28, y + 20, labels[i], (int)strlen(labels[i]));
 		y += ITEM_H;
 	}
 
 	const char *ftr = "j/k  enter  esc";
-	tw = XTextWidth(xfont, ftr, strlen(ftr));
-	XSetForeground(dpy, gc, c_dim);
-	XDrawString(dpy, win, gc, (MENU_W - tw) / 2, win_h - 12, ftr, strlen(ftr));
+	tw = appfont_width(afont, ftr, (int)strlen(ftr));
+	appfont_draw(afont, win, gc, fc_dim, c_dim, (MENU_W - tw) / 2, win_h - 12, ftr, (int)strlen(ftr));
 
 	XSync(dpy, False);
 }
@@ -156,14 +154,18 @@ static int show_menu(Display *dpy, int screen, int sw, int sh) {
 	int count = 3;
 	int win_h = 44 + count * ITEM_H + 30;
 
-	XFontStruct *xfont = XLoadQueryFont(dpy, "fixed");
-	if (!xfont) return -1;
+	AppFont *afont = appfont_open(dpy, appfont_sharedname());
+	if (!afont) return -1;
 
 	unsigned long c_bg     = getcol(dpy, "#282828");
 	unsigned long c_fg     = getcol(dpy, "#ebdbb2");
 	unsigned long c_hi     = getcol(dpy, "#d65d0e");
 	unsigned long c_dim    = getcol(dpy, "#a89984");
 	unsigned long c_border = getcol(dpy, "#689d6a");
+	XftColor fc_fg, fc_hi, fc_dim;
+	appfont_alloccolor(dpy, "#ebdbb2", &fc_fg);
+	appfont_alloccolor(dpy, "#d65d0e", &fc_hi);
+	appfont_alloccolor(dpy, "#a89984", &fc_dim);
 
 	XSetWindowAttributes wa = {
 		.override_redirect = True,
@@ -177,7 +179,6 @@ static int show_menu(Display *dpy, int screen, int sw, int sh) {
 		DefaultVisual(dpy, screen),
 		CWOverrideRedirect | CWBackPixel | CWEventMask, &wa);
 	GC gc = XCreateGC(dpy, root, 0, NULL);
-	XSetFont(dpy, gc, xfont->fid);
 
 	XMapRaised(dpy, win);
 	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
@@ -190,14 +191,14 @@ static int show_menu(Display *dpy, int screen, int sw, int sh) {
 	while (1) {
 		XNextEvent(dpy, &ev);
 		if (ev.type == Expose && ev.xexpose.count == 0)
-			draw_menu(dpy, win, gc, xfont, c_bg, c_fg, c_hi, c_dim, c_border,
-				labels, count, sel, win_h);
+			draw_menu(dpy, win, gc, afont, c_bg, c_fg, c_hi, c_dim, c_border,
+				&fc_fg, &fc_hi, &fc_dim, labels, count, sel, win_h);
 		else if (ev.type == KeyPress) {
 			KeySym ks = XLookupKeysym(&ev.xkey, 0);
-			if (ks == XK_j || ks == XK_Down) { sel++; if (sel >= count) sel = 0; draw_menu(dpy, win, gc, xfont, c_bg, c_fg, c_hi, c_dim, c_border, labels, count, sel, win_h); }
-			else if (ks == XK_k || ks == XK_Up) { sel--; if (sel < 0) sel = count - 1; draw_menu(dpy, win, gc, xfont, c_bg, c_fg, c_hi, c_dim, c_border, labels, count, sel, win_h); }
-			else if (ks == XK_Return) { XFreeFont(dpy, xfont); XFreeGC(dpy, gc); XDestroyWindow(dpy, win); XUngrabPointer(dpy, CurrentTime); return sel; }
-			else if (ks == XK_Escape || ks == XK_q) { XFreeFont(dpy, xfont); XFreeGC(dpy, gc); XDestroyWindow(dpy, win); XUngrabPointer(dpy, CurrentTime); return -1; }
+			if (ks == XK_j || ks == XK_Down) { sel++; if (sel >= count) sel = 0; draw_menu(dpy, win, gc, afont, c_bg, c_fg, c_hi, c_dim, c_border, &fc_fg, &fc_hi, &fc_dim, labels, count, sel, win_h); }
+			else if (ks == XK_k || ks == XK_Up) { sel--; if (sel < 0) sel = count - 1; draw_menu(dpy, win, gc, afont, c_bg, c_fg, c_hi, c_dim, c_border, &fc_fg, &fc_hi, &fc_dim, labels, count, sel, win_h); }
+			else if (ks == XK_Return) { appfont_close(afont); XFreeGC(dpy, gc); XDestroyWindow(dpy, win); XUngrabPointer(dpy, CurrentTime); return sel; }
+			else if (ks == XK_Escape || ks == XK_q) { appfont_close(afont); XFreeGC(dpy, gc); XDestroyWindow(dpy, win); XUngrabPointer(dpy, CurrentTime); return -1; }
 		}
 	}
 }
