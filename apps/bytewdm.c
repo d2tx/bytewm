@@ -526,6 +526,14 @@ runsession(void)
 		setenv("USER", pw->pw_name, 1);
 		setenv("LOGNAME", pw->pw_name, 1);
 		setenv("SHELL", pw->pw_shell, 1);
+		/* systemd --user session bus (created by pam_systemd at login) */
+		{
+			char rtd[64], bus[96];
+			snprintf(rtd, sizeof rtd, "/run/user/%u", (unsigned int)pw->pw_uid);
+			snprintf(bus, sizeof bus, "unix:path=%s/bus", rtd);
+			setenv("XDG_RUNTIME_DIR", rtd, 1);
+			setenv("DBUS_SESSION_BUS_ADDRESS", bus, 1);
+		}
 		chdir(pw->pw_dir);
 
 		/* drop root privileges */

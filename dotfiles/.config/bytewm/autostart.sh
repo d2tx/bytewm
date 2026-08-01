@@ -31,3 +31,6 @@ bytevol &
 # music player daemon (for ncmpcpp)
 pkill mpd 2>/dev/null
 mpd ~/.config/mpd/mpd.conf &
+
+# polkit authentication agent (password dialogs for apps like windscribe)
+/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &
