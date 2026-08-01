@@ -664,17 +664,21 @@ int main(void) {
 					draw();
 				}
 			} else if (ks == XK_Down) {
-				int page_count = s->fmatch - s->page * per_page;
-				if (page_count > per_page) page_count = per_page;
-				if (s->sel < page_count - 1) { s->sel++; draw(); }
+				int pc = s->fmatch - s->page * per_page;
+				if (pc > per_page) pc = per_page;
+				if (pc > 0) { s->sel = (s->sel + 1) % pc; draw(); }
 			} else if (ks == XK_Up) {
-				if (s->sel > 0) { s->sel--; draw(); }
+				int pc = s->fmatch - s->page * per_page;
+				if (pc > per_page) pc = per_page;
+				if (pc > 0) { s->sel = (s->sel - 1 + pc) % pc; draw(); }
 			} else if (!s->filter[0] && ks == XK_j) {
-				int page_count = s->fmatch - s->page * per_page;
-				if (page_count > per_page) page_count = per_page;
-				if (s->sel < page_count - 1) { s->sel++; draw(); }
+				int pc = s->fmatch - s->page * per_page;
+				if (pc > per_page) pc = per_page;
+				if (pc > 0) { s->sel = (s->sel + 1) % pc; draw(); }
 			} else if (!s->filter[0] && ks == XK_k) {
-				if (s->sel > 0) { s->sel--; draw(); }
+				int pc = s->fmatch - s->page * per_page;
+				if (pc > per_page) pc = per_page;
+				if (pc > 0) { s->sel = (s->sel - 1 + pc) % pc; draw(); }
 			} else if (ks == XK_bracketright || ks == XK_Tab ||
 			           (!s->filter[0] && (ks == XK_l || ks == XK_Right))) {
 				if (s->page < s->page_max) { s->page++; s->sel = 0; draw(); }
