@@ -276,7 +276,7 @@ int xft_font;  /* 1 = using Xft, 0 = using core X11 font */
 
 unsigned long normfg, normbg, selfg, selbg, tagfg, tagbg, urgfg, urgbg, unfgborder;
 XftColor xft_normfg, xft_selfg, xft_tagfg, xft_urgfg;
-XftColor xft_cpu, xft_mem, xft_temp, xft_gpu, xft_date, xft_seltag, xft_vol;
+XftColor xft_cpu, xft_mem, xft_temp, xft_gpu, xft_date, xft_seltag, xft_vol, xft_vpn;
 GC bargc;
 static char status[512] = "";
 static char status_cache[512] = "";
@@ -1280,8 +1280,9 @@ drawbar(Monitor *m)
 
 			XftColor *fc = &xft_normfg;
 			if (strstr(p, "CPU") && strstr(p, "°")) fc = &xft_temp;
-			else if (strstr(p, "VOL")) fc = &xft_vol;
-			else if (strstr(p, "GPU")) fc = &xft_gpu;
+		else if (strstr(p, "VOL")) fc = &xft_vol;
+		else if (strstr(p, "VPN")) fc = &xft_vpn;
+		else if (strstr(p, "GPU")) fc = &xft_gpu;
 			else if (strstr(p, "CPU")) fc = &xft_cpu;
 			else if (strstr(p, "MEM"))  fc = &xft_mem;
 			else if (strstr(p, "°") || strstr(p, "C"))
@@ -2937,6 +2938,8 @@ void
 		XftColorAllocName(dpy, vis, cmap,
 			"#fe8019", &xft_vol);
 		XftColorAllocName(dpy, vis, cmap,
+			"#b16286", &xft_vpn);
+		XftColorAllocName(dpy, vis, cmap,
 			"#a89984", &xft_date);
 	}
 
@@ -3102,6 +3105,8 @@ cleanup(void)
 		DefaultColormap(dpy, screen), &xft_seltag);
 	XftColorFree(dpy, DefaultVisual(dpy, screen),
 		DefaultColormap(dpy, screen), &xft_vol);
+	XftColorFree(dpy, DefaultVisual(dpy, screen),
+		DefaultColormap(dpy, screen), &xft_vpn);
 	XFreeGC(dpy, bargc);
 	XUngrabKey(dpy, AnyKey, AnyModifier, root);
 	XFreeCursor(dpy, cursor[CurNormal]);

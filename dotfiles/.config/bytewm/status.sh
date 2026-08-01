@@ -39,9 +39,66 @@ vol=$(cat /tmp/bytevol_level 2>/dev/null)
 [ -z "$vol" ] && vol="0"
 [ "$vol" != "MUTE" ] && vol="${vol}%"
 
+# VPN (Windscribe) - lightweight: utun check for on/off, cached country
+city_to_code() {
+	case "$1" in
+		Vienna) echo AT;; Berlin|Frankfurt) echo DE;; Paris|Bordeaux|Marseille) echo FR;;
+		Amsterdam) echo NL;; London|Manchester|Edinburgh) echo GB;;
+		Atlanta|Ashburn|Bend|Boston|Buffalo|Charlotte|Chicago|Cleveland|Dallas|Denver|Detroit|Honolulu|Houston|Kansas\ City|Las\ Vegas|Los\ Angeles|Miami|New\ Jersey|New\ York|Orlando|Philadelphia|Phoenix|Raleigh|Salt\ Lake\ City|San\ Francisco|San\ Jose|Santa\ Clara|Seattle|South\ Bend|Tampa|Washington\ DC) echo US;;
+		Toronto|Montreal|Calgary|Vancouver|Winnipeg|Halifax) echo CA;;
+		Sydney|Melbourne|Brisbane|Perth|Adelaide) echo AU;;
+		Milan|Palermo) echo IT;; Madrid|Barcelona) echo ES;;
+		Oslo) echo NO;; Stockholm) echo SE;; Helsinki) echo FI;;
+		Copenhagen) echo DK;; Warsaw|Gdansk) echo PL;;
+		Prague) echo CZ;; Bratislava) echo SK;; Budapest) echo HU;;
+		Zagreb) echo HR;; Ljubljana) echo SI;; Belgrade) echo RS;;
+		Sofia) echo BG;; Bucharest) echo RO;; Skopje) echo MK;;
+		Tirana) echo AL;; Sarajevo|Novi\ Travnik) echo BA;;
+		Athens) echo GR;; Nicosia|Limassol) echo CY;;
+		Istanbul) echo TR;; Tbilisi) echo GE;; Chisinau) echo MD;;
+		Kyiv) echo UA;; Moscow|Fake\ St\ Petersburg) echo RU;;
+		Riga) echo LV;; Vilnius) echo LT;; Tallinn) echo EE;;
+		Luxembourg) echo LU;; Brussels) echo BE;; Dublin) echo IE;;
+		Zurich) echo CH;; Reykjavik) echo IS;;
+		Tokyo) echo JP;; Seoul) echo KR;; Taipei) echo TW;;
+		Bangkok) echo TH;; Hanoi) echo VN;; Singapore) echo SG;;
+		Kuala\ Lumpur) echo MY;; Jakarta|Surabaya|Bali) echo ID;;
+		Manila) echo PH;; Hong\ Kong) echo HK;;
+		Mumbai|New\ Delhi|Fake\ Mumbai) echo IN;;
+		Tel\ Aviv|Ashdod) echo IL;; Dubai) echo AE;;
+		Johannesburg) echo ZA;; Nairobi) echo KE;; Lagos) echo NG;;
+		Buenos\ Aires) echo AR;; Santiago) echo CL;; Bogota) echo CO;;
+		Lima) echo PE;; Quito) echo EC;; Asuncion) echo PY;;
+		Montevideo) echo UY;; Panama\ City) echo PA;;
+		Sao\ Paulo) echo BR;; Mexico\ City|Queretaro) echo MX;;
+		Guatemala\ City) echo GT;; San\ Salvador) echo SV;;
+		Bali) echo ID;; Queretaro) echo MX;;
+		Troll) echo AQ;;
+	esac
+}
+
+vpn_country() {
+	cache=/tmp/bytewm_vpn_country
+	if [ -f "$cache" ] && [ $(( $(date +%s) - $(stat -c %Y "$cache") )) -lt 30 ]; then
+		cat "$cache"
+		return
+	fi
+	city=$(timeout 8 windscribe-cli status 2>/dev/null \
+		| sed -n 's/^Connect state: Connected: //p' | sed 's/ - .*//')
+	code=$(city_to_code "$city")
+	[ -n "$code" ] && printf '%s' "$code" > "$cache"
+	echo "${code:-?}"
+}
+
+vpn="OFF"
+if ip link show 2>/dev/null | grep -q "utun"; then
+	vpn=$(vpn_country)
+fi
+
 datetime=$(date +"%I:%M %p")
 
 printf "VOL %s" "$vol"
+printf " | VPN %s" "$vpn"
 printf " | CPU %d%% | MEM %s" "$cpu" "${mem_used}/${mem_total}M"
 [ -n "$cputemp" ] && printf " | CPU %d°C" "$cputemp"
 [ -n "$gputemp" ] && printf " | GPU %d°C" "$gputemp"
