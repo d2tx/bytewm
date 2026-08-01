@@ -21,7 +21,7 @@ apps:
 	done
 
 bytewdm: apps/bytewdm.c
-	$(CC) $(APPS_CFLAGS) -o apps/$@ apps/bytewdm.c apps/appfont.c -lX11 -lXft -lpam
+	$(CC) $(APPS_CFLAGS) -o apps/$@ apps/bytewdm.c -lX11 -lpam
 
 bytekill: apps/bytekill.s
 	as -o apps/bytekill.o apps/bytekill.s

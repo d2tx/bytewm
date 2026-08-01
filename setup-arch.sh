@@ -82,6 +82,7 @@ cp -a dotfiles/.config/gtk-3.0 "$HOME/.config/" 2>/dev/null || true
 cp -a dotfiles/.config/qutebrowser "$HOME/.config/" 2>/dev/null || true
 cp -a dotfiles/.config/nvim "$HOME/.config/" 2>/dev/null || true
 cp -a dotfiles/.config/bytewm "$HOME/.config/" 2>/dev/null || true
+cp -a dotfiles/.config/bytemenu "$HOME/.config/" 2>/dev/null || true
 echo "     done"
 
 echo "==> Installing GTK theme..."
