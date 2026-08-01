@@ -3106,11 +3106,69 @@ cleanup(void)
 	XSetInputFocus(dpy, PointerRoot, RevertToPointerRoot, CurrentTime);
 }
 
+static void
+print_help(void)
+{
+	const char *lines[] = {
+		"bytewm - retro tiling window manager",
+		"usage: bytewm [-v | -h | --help]",
+		"",
+		"KEYBINDS (Super = Mod4):",
+		"  Super+p                  launcher (bytelaunch)",
+		"  Super+Shift+Return       terminal (st)",
+		"  Super+Return             scratchpad terminal",
+		"  Super+s                  screenshot (bytesnap)",
+		"  Super+c                  color picker (bytepick)",
+		"  Super+Shift+m            menu (bytemenu)",
+		"  Super+Ctrl+l             lock screen (bytelock)",
+		"  Super+j / k              focus prev / next window",
+		"  Super+Shift+j / k        swap prev / next window",
+		"  Super+i / d              master count + / -",
+		"  Super+h / l              master size - / +",
+		"  Super+Ctrl+h / g         client size - / +",
+		"  Super+z                  zoom to master",
+		"  Super+arrows             move window",
+		"  Super+Shift+arrows       resize window",
+		"  Super+Tab                previous tag",
+		"  Alt+Tab                  window switcher (byteswitch)",
+		"  Super+w                  kill window",
+		"  Super+t / b / m          tile / bsp / monocle layout",
+		"  Super+space              floating layout",
+		"  Super+Shift+space        toggle floating",
+		"  Super+f                  fullscreen",
+		"  Super+F10/F11/F12        volume down / up / toggle",
+		"  Super+Shift+v            show volume",
+		"  Super+Shift+p            play / pause (mpc)",
+		"  Super+Shift+, / .        previous / next track",
+		"  Super+0                  view all tags",
+		"  Super+Shift+0            toggle window on all tags",
+		"  Super+, / .              previous / next monitor",
+		"  Super+Shift+q            exit / shutdown menu (bytewm-exit)",
+		"  Super+Shift+r            reload config",
+		"  Super+1-5                view tag",
+		"  Super+Shift+1-5          send window to tag",
+		"",
+		"MOUSE:",
+		"  Super+drag               move window",
+		"  Super+Button2            zoom",
+		"  Super+Button3            resize window",
+		"  Super+Scroll             focus stack",
+		"  Super+Shift+Scroll       resize client",
+		NULL
+	};
+	for (int i = 0; lines[i]; i++)
+		puts(lines[i]);
+}
+
 int
 main(int argc, char *argv[])
 {
-	if (argc == 2 && !strcmp(argv[1], "-v")) {
+	if (argc == 2 && (!strcmp(argv[1], "-v") || !strcmp(argv[1], "--version"))) {
 		puts("bytewm-" VERSION);
+		return 0;
+	}
+	if (argc == 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
+		print_help();
 		return 0;
 	}
 
