@@ -300,8 +300,8 @@ main(int argc, char *argv[])
 			}
 		}
 		XUnmapWindow(dpy, win);
-		XDestroyWindow(dpy, win);
 		appfont_close(afont);
+		XDestroyWindow(dpy, win);
 		XFreeGC(dpy, gc);
 		XCloseDisplay(dpy);
 		return 0;
@@ -312,8 +312,8 @@ main(int argc, char *argv[])
 	int xfd = ConnectionNumber(dpy);
 	int fd = open(fifo_path, O_RDWR | O_NONBLOCK | O_CLOEXEC);
 	if (fd < 0) {
-		XDestroyWindow(dpy, win);
 		appfont_close(afont);
+		XDestroyWindow(dpy, win);
 		XFreeGC(dpy, gc);
 		XCloseDisplay(dpy);
 		return 1;
@@ -322,8 +322,8 @@ main(int argc, char *argv[])
 		struct stat st;
 		if (fstat(fd, &st) == 0 && !S_ISFIFO(st.st_mode)) {
 			close(fd);
-			XDestroyWindow(dpy, win);
 			appfont_close(afont);
+			XDestroyWindow(dpy, win);
 			XFreeGC(dpy, gc);
 			XCloseDisplay(dpy);
 			return 1;
@@ -398,8 +398,8 @@ main(int argc, char *argv[])
 	}
 
 	close(fd);
-	XDestroyWindow(dpy, win);
 	appfont_close(afont);
+	XDestroyWindow(dpy, win);
 	XFreeGC(dpy, gc);
 	XCloseDisplay(dpy);
 	return 0;

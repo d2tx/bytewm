@@ -231,8 +231,8 @@ main(void)
 	}
 
 	close(fd);
-	XDestroyWindow(dpy, win);
 	appfont_close(afont);
+	XDestroyWindow(dpy, win);
 	XFreeGC(dpy, gc);
 	XCloseDisplay(dpy);
 	return 0;

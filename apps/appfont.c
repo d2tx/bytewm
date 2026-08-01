@@ -99,11 +99,7 @@ void appfont_close(AppFont *af) {
 	if (!af) return;
 	if (af->core) XFreeFont(af->dpy, af->core);
 	if (af->xft) {
-		if (af->draw) {
-			/* the drawable may already be destroyed; reset to root first */
-			XftDrawChange(af->draw, DefaultRootWindow(af->dpy));
-			XftDrawDestroy(af->draw);
-		}
+		if (af->draw) XftDrawDestroy(af->draw);
 		XftFontClose(af->dpy, af->xft);
 	}
 	free(af);
