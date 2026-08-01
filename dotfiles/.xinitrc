@@ -1,1 +1,1 @@
-exec /home/xmr/.local/bin/bytewm
+exec dbus-run-session -- /home/xmr/.local/bin/bytewm
