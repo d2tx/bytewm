@@ -1,6 +1,6 @@
 #!/bin/sh
 # bytewm settings helper: list font families or sizes for a family
-BITMAPS="fixed Micro 6x13 9x15 10x20 Terminus"
+BITMAPS="fixed 6x13 9x15 10x20 Terminus"
 case "$1" in
 	families)
 		for b in $BITMAPS; do
