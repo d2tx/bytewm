@@ -12,8 +12,8 @@
 #include "appfont.h"
 
 #define MAX_WINS 64
-#define ITEM_H   30
-#define WIN_W    500
+#define PAPER_W  360
+#define PAPER_H  420
 #define BORDER_W 2
 
 static Display *dpy;
@@ -21,6 +21,7 @@ static Window root, win;
 static GC gc;
 static AppFont *afont;
 static int sw, sh, win_h;
+static int itemh, per_page, page, page_max;
 static unsigned long c_bg, c_fg, c_hi, c_border, c_dim;
 static XftColor fc_fg, fc_hi, fc_dim;
 
@@ -48,33 +49,72 @@ static unsigned long getcol(const char *s) {
     return xc.pixel;
 }
 
-static void draw(void) {
-    XSetForeground(dpy, gc, c_bg);
-    XFillRectangle(dpy, win, gc, 0, 0, WIN_W, win_h);
+/* truncate label to maxw pixels, appending "..." if needed */
+static void truncate_label(const char *in, char *out, size_t outsz, int maxw) {
+    size_t len = strlen(in);
+    if (len + 1 > outsz) len = outsz - 1;
+    memcpy(out, in, len);
+    out[len] = '\0';
+    if (appfont_width(afont, out, (int)len) <= maxw)
+        return;
+    while (len > 3) {
+        len--;
+        memcpy(out + len - 3, "...", 3);
+        out[len] = '\0';
+        if (appfont_width(afont, out, (int)len) <= maxw)
+            return;
+    }
+    out[0] = '.'; out[1] = '.'; out[2] = '.'; out[3] = '\0';
+}
 
-    const char *hdr = "s w i t c h   w i n d o w";
+static void draw(void) {
+    int hdr_y = itemh + 6;
+    int rule_y = itemh + 18;
+    int top_margin = itemh * 2;
+    int bot_margin = itemh + 20;
+    int base_off = itemh - 8;
+    int ftr_y = win_h - (itemh / 2 + 7);
+
+    XSetForeground(dpy, gc, c_bg);
+    XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, win_h);
+
+    const char *hdr = "s w i t c h";
     int tw = appfont_width(afont, hdr, (int)strlen(hdr));
-    appfont_draw(afont, win, gc, &fc_dim, c_dim, (WIN_W - tw) / 2, 28, hdr, (int)strlen(hdr));
+    appfont_draw(afont, win, gc, &fc_dim, c_dim, (PAPER_W - tw) / 2, hdr_y, hdr, (int)strlen(hdr));
 
     XSetForeground(dpy, gc, c_border);
-    XFillRectangle(dpy, win, gc, 20, 42, WIN_W - 40, 2);
-    XFillRectangle(dpy, win, gc, 0, 0, WIN_W, BORDER_W);
-    XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, WIN_W, BORDER_W);
+    XFillRectangle(dpy, win, gc, 20, rule_y, PAPER_W - 40, 2);
+    XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, BORDER_W);
+    XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
     XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, win_h);
-    XFillRectangle(dpy, win, gc, WIN_W - BORDER_W, 0, BORDER_W, win_h);
+    XFillRectangle(dpy, win, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
 
-    int y = 56;
-    for (int i = 0; i < count; i++) {
-        if (i == sel)
-            appfont_draw(afont, win, gc, &fc_hi, c_hi, 16, y + 20, ">", 1);
-        appfont_draw(afont, win, gc, i == sel ? &fc_hi : &fc_fg,
-                     i == sel ? c_hi : c_fg, 32, y + 20, labels[i], (int)strlen(labels[i]));
-        y += ITEM_H;
+    int start = page * per_page;
+    int pc = count - start;
+    if (pc > per_page) pc = per_page;
+    if (pc < 0) pc = 0;
+    int block = pc * itemh;
+    int top = top_margin + ((win_h - top_margin - bot_margin) - block) / 2;
+    char tmp[256];
+    for (int i = 0; i < pc; i++) {
+        int idx = start + i;
+        int y = top + i * itemh;
+        int is_sel = (idx == sel);
+        truncate_label(labels[idx], tmp, sizeof(tmp), PAPER_W - 32);
+        tw = appfont_width(afont, tmp, (int)strlen(tmp));
+        if (is_sel)
+            appfont_draw(afont, win, gc, &fc_hi, c_hi, (PAPER_W - tw) / 2 - 20, y + base_off, ">", 1);
+        appfont_draw(afont, win, gc, is_sel ? &fc_hi : &fc_fg,
+                     is_sel ? c_hi : c_fg, (PAPER_W - tw) / 2, y + base_off, tmp, (int)strlen(tmp));
     }
 
-    const char *ftr = "tab:cycle  release-alt/enter:select  esc:cancel";
-    tw = appfont_width(afont, ftr, (int)strlen(ftr));
-    appfont_draw(afont, win, gc, &fc_dim, c_dim, (WIN_W - tw)/2, win_h - 14, ftr, (int)strlen(ftr));
+    /* page indicator, bottom-right */
+    if (page_max > 0) {
+        char pg[32];
+        snprintf(pg, sizeof(pg), "[%d/%d]", page + 1, page_max + 1);
+        int pw = appfont_width(afont, pg, (int)strlen(pg));
+        appfont_draw(afont, win, gc, &fc_dim, c_dim, PAPER_W - pw - 12, ftr_y, pg, (int)strlen(pg));
+    }
 
     XSync(dpy, False);
 }
@@ -211,10 +251,17 @@ int main(void) {
         }
     }
 
-    win_h = 56 + count * ITEM_H + 24;
-    if (win_h < 200) win_h = 200;
+    win_h = PAPER_H;
     if (win_h > sh - 40) win_h = sh - 40;
-    if (win_h < 100) win_h = 100;
+    if (win_h < 240) win_h = 240;
+
+    /* adaptive layout: row height + rows/page derive from the font */
+    itemh = afont->height + 14;
+    per_page = (win_h - itemh * 3 - 20) / itemh;
+    if (per_page < 1) per_page = 1;
+    if (per_page > 6) per_page = 6;
+    page_max = count > per_page ? (count - 1) / per_page : 0;
+    page = sel / per_page;
 
     XSetWindowAttributes wa = {
         .override_redirect = True,
@@ -222,8 +269,8 @@ int main(void) {
         .event_mask        = ExposureMask | KeyPressMask | KeyReleaseMask
     };
     win = XCreateWindow(dpy, root,
-        (sw - WIN_W) / 2, (sh - win_h) / 2,
-        WIN_W, win_h, 0,
+        (sw - PAPER_W) / 2, (sh - win_h) / 2,
+        PAPER_W, win_h, 0,
         DefaultDepth(dpy, scr), CopyFromParent,
         DefaultVisual(dpy, scr),
         CWOverrideRedirect | CWBackPixel | CWEventMask, &wa);
@@ -274,6 +321,9 @@ int main(void) {
 
         if (ev.type == KeyPress) {
             KeySym ks = XLookupKeysym(&ev.xkey, 0);
+            int pc = count - page * per_page;
+            if (pc > per_page) pc = per_page;
+            if (pc < 0) pc = 0;
             if (ks == XK_Escape || ks == XK_q) {
                 cancelled = 1;
                 done = 1;
@@ -282,13 +332,22 @@ int main(void) {
                     sel = (sel - 1 + count) % count;
                 else
                     sel = (sel + 1) % count;
+                page = sel / per_page;
                 draw();
             } else if (ks == XK_j || ks == XK_Down) {
-                sel = (sel + 1) % count;
-                draw();
+                if (pc > 0) {
+                    sel = page * per_page + (sel - page * per_page + 1) % pc;
+                    draw();
+                }
             } else if (ks == XK_k || ks == XK_Up) {
-                sel = (sel - 1 + count) % count;
-                draw();
+                if (pc > 0) {
+                    sel = page * per_page + (sel - page * per_page - 1 + pc) % pc;
+                    draw();
+                }
+            } else if (ks == XK_bracketright) {
+                if (page < page_max) { page++; sel = page * per_page; draw(); }
+            } else if (ks == XK_bracketleft) {
+                if (page > 0) { page--; sel = page * per_page; draw(); }
             } else if (ks == XK_Return) {
                 done = 1;
             }
