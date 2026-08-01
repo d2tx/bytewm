@@ -40,7 +40,7 @@ fi
 # ── 32-bit libraries ─────────────────────────────────────
 if [ "$m32" = "y" ] || [ "$m32" = "Y" ]; then
   echo "==> 32-bit libraries"
-  install lib32-mesa lib32-vulkan-radeon
+  install lib32-mesa lib32-vulkan-radeon lib32-alsa-lib lib32-alsa-plugins
   [ "$nv" = "y" ] || [ "$nv" = "Y" ] && install lib32-nvidia-utils
 fi
 

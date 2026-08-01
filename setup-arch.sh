@@ -18,7 +18,7 @@ fi
 echo "==> bytewm setup for Arch Linux"
 echo "==> Installing packages..."
 sudo pacman -S --needed --noconfirm \
-  base-devel libx11 libxft fontconfig freetype2 xorg-server xorg-xinit alsa-utils \
+  base-devel libx11 libxft fontconfig freetype2 xorg-server xorg-xinit alsa-utils alsa-lib alsa-plugins \
   feh xorg-xrdb xorg-xrandr xorg-fonts-misc pam git ttf-dejavu terminus-font \
   smartmontools bat fish neovim ranger
 
