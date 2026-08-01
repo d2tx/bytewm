@@ -115,6 +115,7 @@ typedef struct Client {
 	int bw, oldbw;
 	unsigned int tags, oldtags;
 	int isfixed, isfloating, isurgent, isfullscreen;
+	int istransient;
 	int neverfocus;
 	int oldstate;
 	int autofloat;
@@ -1768,6 +1769,7 @@ manage(Window w, XWindowAttributes *wa)
 		Window trans;
 		if (XGetTransientForHint(dpy, w, &trans) && trans != None) {
 			c->isfloating = 1;
+			c->istransient = 1;
 		}
 	}
 
@@ -2106,7 +2108,9 @@ enternotify(XEvent *e)
 	if (ev->time == lasttime)
 		return;
 	Client *c = wintoclient(ev->window);
-	if (c && c != selmon->sel) {
+	/* don't steal focus from an open dialog (modal focus war) */
+	if (c && c != selmon->sel &&
+	    !(selmon->sel && selmon->sel->istransient)) {
 		focus(c, 0);
 		selmon = c->mon;
 		drawbars();
@@ -2170,6 +2174,7 @@ propertynotify(XEvent *e)
 	if (ev->atom == XA_WM_TRANSIENT_FOR) {
 		Window trans;
 		if (XGetTransientForHint(dpy, c->win, &trans) && trans != None) {
+			c->istransient = 1;
 			if (!c->isfloating) {
 				c->isfloating = 1;
 				c->bw = borderpx;
