@@ -1,5 +1,7 @@
 /* bytewm-exit - logout/restart/shutdown dialog */
 #define _POSIX_C_SOURCE 200809L
+#define PAPER_W 324
+#define PAPER_H 378
 #define BORDER_W 2
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -14,13 +16,8 @@ static Display *dpy;
 static Window win;
 static GC gc;
 static AppFont *afont;
-static int bh, sw;
+static int sw, sh, win_h, itemh;
 static int selected = 0;
-
-static const char *bg = "#282828";
-static const char *fg = "#ebdbb2";
-static const char *selbg = "#689d6a";
-static const char *selfg = "#282828";
 
 static const char *items[] = { "Lock", "Logout", "Restart", "Shutdown" };
 static const char *cmds[] = {
@@ -41,54 +38,50 @@ getcol(const char *c)
 	return xc.pixel;
 }
 
-static unsigned long cbg, cfg, cselbg, cselfg, cborder;
-static XftColor fc_fg, fc_selfg;
+static unsigned long cbg, cfg, chi, cdim, cborder;
+static XftColor fc_fg, fc_hi, fc_dim;
+
+static int
+item_top(void)
+{
+	int ftr_y = win_h - (itemh / 2 + 7);
+	int block = nitems * itemh;
+	int area_top = itemh * 2;
+	int area_bot = ftr_y - itemh;
+	return area_top + ((area_bot - area_top) - block) / 2;
+}
 
 static void
 redraw(void)
 {
-	int pad = 10;
-	int itemh = bh + 4;
-	int total = nitems * itemh;
-	int winw = sw; /* will be resized below */
-	int winh = total + 8;
-
-	/* find widest item */
-	int maxw = 0;
-	for (int i = 0; i < nitems; i++) {
-		int tw = appfont_width(afont, items[i], (int)strlen(items[i]));
-		if (tw > maxw) maxw = tw;
-	}
-	winw = maxw + pad * 4;
-	winh = total + 8;
-
-	int sh = DisplayHeight(dpy, DefaultScreen(dpy));
-	int x = (sw - winw) / 2;
-	int y = (sh - winh) / 2;
-	XMoveResizeWindow(dpy, win, x, y, winw, winh);
+	int hdr_y = itemh + 6;
+	int rule_y = itemh + 18;
+	int base_off = itemh - 8;
 
 	XSetForeground(dpy, gc, cbg);
-	XFillRectangle(dpy, win, gc, 0, 0, winw, winh);
+	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, win_h);
+
+	const char *hdr = "e x i t";
+	int tw = appfont_width(afont, hdr, (int)strlen(hdr));
+	appfont_draw(afont, win, gc, &fc_dim, cdim, (PAPER_W - tw) / 2, hdr_y, hdr, (int)strlen(hdr));
 
 	XSetForeground(dpy, gc, cborder);
-	XFillRectangle(dpy, win, gc, 0, 0, winw, BORDER_W);
-	XFillRectangle(dpy, win, gc, 0, winh - BORDER_W, winw, BORDER_W);
-	XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, winh);
-	XFillRectangle(dpy, win, gc, winw - BORDER_W, 0, BORDER_W, winh);
+	XFillRectangle(dpy, win, gc, 20, rule_y, PAPER_W - 40, 2);
+	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, BORDER_W);
+	XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
+	XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, win_h);
+	XFillRectangle(dpy, win, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
 
+	int top = item_top();
 	for (int i = 0; i < nitems; i++) {
-		int tw = appfont_width(afont, items[i], (int)strlen(items[i]));
-		int ix = (winw - tw) / 2;
-		int iy = 4 + i * itemh + bh / 2;
-
-		if (i == selected) {
-			XSetForeground(dpy, gc, cselbg);
-			XFillRectangle(dpy, win, gc, ix - pad, iy - bh / 2, tw + pad * 2, bh);
-		}
-		appfont_draw(afont, win, gc, i == selected ? &fc_selfg : &fc_fg,
-		             i == selected ? cselfg : cfg,
-		             ix, iy + bh / 2 - 2, items[i], (int)strlen(items[i]));
+		int y = top + i * itemh;
+		tw = appfont_width(afont, items[i], (int)strlen(items[i]));
+		if (i == selected)
+			appfont_draw(afont, win, gc, &fc_hi, chi, (PAPER_W - tw) / 2 - 20, y + base_off, ">", 1);
+		appfont_draw(afont, win, gc, i == selected ? &fc_hi : &fc_fg,
+		             i == selected ? chi : cfg, (PAPER_W - tw) / 2, y + base_off, items[i], (int)strlen(items[i]));
 	}
+
 	XFlush(dpy);
 }
 
@@ -121,38 +114,33 @@ main(int argc, char *argv[])
 
 	int screen = DefaultScreen(dpy);
 	sw = DisplayWidth(dpy, screen);
+	sh = DisplayHeight(dpy, screen);
 	Window root = RootWindow(dpy, screen);
 
 	afont = appfont_open(dpy, appfont_sharedname());
 	if (!afont) { XCloseDisplay(dpy); return 1; }
-	bh = afont->height + 4;
 
-	cbg = getcol(bg);
-	cfg = getcol(fg);
-	cselbg = getcol(selbg);
-	cselfg = getcol(selfg);
+	win_h = PAPER_H;
+	if (win_h > sh - 40) win_h = sh - 40;
+	if (win_h < 240) win_h = 240;
+	itemh = afont->height + 14;
+
+	cbg = getcol("#282828");
+	cfg = getcol("#ebdbb2");
+	chi = getcol("#d65d0e");
+	cdim = getcol("#a89984");
 	cborder = getcol("#689d6a");
-	appfont_alloccolor(dpy, fg, &fc_fg);
-	appfont_alloccolor(dpy, selfg, &fc_selfg);
-
-	int maxw = 0;
-	for (int i = 0; i < nitems; i++) {
-		int tw = appfont_width(afont, items[i], (int)strlen(items[i]));
-		if (tw > maxw) maxw = tw;
-	}
-
-	int pad = 10;
-	int winw = maxw + pad * 4;
-	int winh = nitems * (bh + 4) + 8;
-	int sh = DisplayHeight(dpy, screen);
-	int winx = (sw - winw) / 2;
-	int winy = (sh - winh) / 2;
+	appfont_alloccolor(dpy, "#ebdbb2", &fc_fg);
+	appfont_alloccolor(dpy, "#d65d0e", &fc_hi);
+	appfont_alloccolor(dpy, "#a89984", &fc_dim);
 
 	XSetWindowAttributes wa = {
 		.override_redirect = True,
 		.background_pixel = cbg,
 	};
-	win = XCreateWindow(dpy, root, winx, winy, winw, winh, 0,
+	win = XCreateWindow(dpy, root,
+		(sw - PAPER_W) / 2, (sh - win_h) / 2,
+		PAPER_W, win_h, 0,
 		DefaultDepth(dpy, screen), CopyFromParent,
 		DefaultVisual(dpy, screen),
 		CWOverrideRedirect|CWBackPixel, &wa);
@@ -181,13 +169,15 @@ main(int argc, char *argv[])
 			if (ks == XK_Down || ks == XK_j) { selected = (selected + 1) % nitems; redraw(); }
 			if (ks == XK_Return || ks == XK_space) { run_cmd(selected); break; }
 		} else if (ev.type == ButtonPress) {
-			int idx = ev.xbutton.y / (bh + 4);
+			int top = item_top();
+			int idx = (ev.xbutton.y - top) / itemh;
 			if (idx >= 0 && idx < nitems) {
 				selected = idx;
 				redraw();
 			}
 		} else if (ev.type == MotionNotify) {
-			int idx = ev.xmotion.y / (bh + 4);
+			int top = item_top();
+			int idx = (ev.xmotion.y - top) / itemh;
 			if (idx >= 0 && idx < nitems && idx != selected) {
 				selected = idx;
 				redraw();
@@ -195,6 +185,7 @@ main(int argc, char *argv[])
 		}
 	}
 
+	appfont_close(afont);
 	XDestroyWindow(dpy, win);
 	XFreeGC(dpy, gc);
 	XCloseDisplay(dpy);
