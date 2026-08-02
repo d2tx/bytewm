@@ -71,14 +71,21 @@ fi
 # ── asusctl ──────────────────────────────────────────────
 if [ "$ac" = "y" ] || [ "$ac" = "Y" ]; then
   echo "==> Building asusctl..."
-  install rust cargo clang
+  install rust cargo clang linux-headers
   rm -rf /tmp/asusctl
   git clone --depth 1 https://github.com/opengamingcollective/asusctl /tmp/asusctl
   (cd /tmp/asusctl && CARGO_BUILD_JOBS=1 cargo build --release -p asusctl -p asusd)
-  sudo cp /tmp/asusctl/target/release/asusctl /usr/local/bin/ 2>/dev/null || true
-  sudo cp /tmp/asusctl/target/release/asusd /usr/local/bin/ 2>/dev/null || true
+  # install to /usr/bin to match the shipped asusd.service (ExecStart=/usr/bin/asusd)
+  sudo cp /tmp/asusctl/target/release/asusctl /usr/bin/ 2>/dev/null || true
+  sudo cp /tmp/asusctl/target/release/asusd /usr/bin/ 2>/dev/null || true
   sudo cp /tmp/asusctl/data/asusd.service /etc/systemd/system/ 2>/dev/null || true
-  sudo systemctl enable --now asusd 2>/dev/null || true
+  if lsmod 2>/dev/null | grep -q asus_nb_wmi; then
+    sudo systemctl enable --now asusd 2>/dev/null || true
+  else
+    echo "  WARNING: asus-nb-wmi kernel module not loaded — asusd needs real"
+    echo "  ASUS hardware (WMI/ACPI). Enable after boot confirms the module:"
+    echo "    lsmod | grep asus_nb_wmi && sudo systemctl start asusd"
+  fi
   rm -rf /tmp/asusctl
 fi
 
