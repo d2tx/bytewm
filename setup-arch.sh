@@ -37,7 +37,7 @@ for f in cozette.otb cozette_hidpi.otb; do
   fi
 done
 fc-cache -f 2>/dev/null || true
-if fc-list 2>/dev/null | grep -qi '^Cozette'; then
+if fc-list 2>/dev/null | grep -qi 'Cozette'; then
   echo "     Cozette installed"
 else
   echo "     WARNING: Cozette not registered"
