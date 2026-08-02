@@ -19,7 +19,7 @@ static AppFont *afont;
 static int sw, sh, win_h, itemh;
 static int selected = 0;
 
-static const char *items[] = { "Lock", "Logout", "Suspend", "Restart", "Shutdown" };
+static const char *items[] = { "lock", "logout", "suspend", "restart", "shutdown" };
 static const char *cmds[] = {
 	"bytelock",
 	"pkill -x -u \"$USER\" bytewm",

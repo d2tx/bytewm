@@ -65,10 +65,10 @@ struct catdef {
 };
 
 static const struct catdef catdefs[] = {
-	{ "Softwares", "s o f t w a r e s", "softwares.conf", 0 },
-	{ "Games",     "g a m e s",         "games.conf",     1 },
-	{ "Emulators", "e m u l a t o r s",  "emulators.conf", 0 },
-	{ "Settings",  "s e t t i n g s",   "settings.conf",  0 },
+	{ "softwares", "s o f t w a r e s", "softwares.conf", 0 },
+	{ "games",     "g a m e s",         "games.conf",     1 },
+	{ "emulators", "e m u l a t o r s",  "emulators.conf", 0 },
+	{ "settings",  "s e t t i n g s",   "settings.conf",  0 },
 };
 
 static struct submenu cats[MAX_CATS];
@@ -351,9 +351,9 @@ static void build_main_menu(void) {
 		}
 		mainmenu.count = cat_count;
 	} else {
-		mainmenu.labels[0] = "Terminal"; mainmenu.commands[0] = "st";
-		mainmenu.labels[1] = "Browser";  mainmenu.commands[1] = "firefox";
-		mainmenu.labels[2] = "Files";    mainmenu.commands[2] = "st -e ranger";
+		mainmenu.labels[0] = "terminal"; mainmenu.commands[0] = "st";
+		mainmenu.labels[1] = "browser";  mainmenu.commands[1] = "firefox";
+		mainmenu.labels[2] = "files";    mainmenu.commands[2] = "st -e ranger";
 		mainmenu.count = 3;
 	}
 	mainmenu.page_max = mainmenu.count > per_page ? (mainmenu.count - 1) / per_page : 0;
@@ -374,7 +374,7 @@ static void draw(void);
 
 /* the search field only makes sense on long, searchable lists */
 static int show_field(const struct submenu *s) {
-	return s->label && !strcmp(s->label, "Font");
+	return s->label && !strcmp(s->label, "font");
 }
 
 /* truncate label to maxw pixels, appending "..." if needed */
