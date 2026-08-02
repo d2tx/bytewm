@@ -26,10 +26,18 @@ case "$1" in
 		;;
 	sizes)
 		fam="$2"
+		# does this family have a Bold style installed?
+		if fc-list --format='%{family} %{style}\n' 2>/dev/null | grep -qi "^$fam Bold$"; then
+			HASBOLD=1
+		else
+			HASBOLD=0
+		fi
 		case "$fam" in
 			Terminus|"xos4 Terminus")
 				for sz in 12 14 16 18 20 22 24 28 32; do
 					printf '%s | "%s/.config/bytewm/font.sh" "%s:size=%s"\n' "$sz" "$HOME" "$fam" "$sz"
+					[ "$HASBOLD" = 1 ] && \
+						printf '%s bold | "%s/.config/bytewm/font.sh" "%s:size=%s:bold"\n' "$sz" "$HOME" "$fam" "$sz"
 				done
 				exit 0
 				;;
@@ -56,6 +64,8 @@ case "$1" in
 		esac
 		for sz in 8 9 10 11 12 13 14 16 18 20 22 24 26 32; do
 			printf '%s | "%s/.config/bytewm/font.sh" "%s:size=%s"\n' "$sz" "$HOME" "$fam" "$sz"
+			[ "$HASBOLD" = 1 ] && \
+				printf '%s bold | "%s/.config/bytewm/font.sh" "%s:size=%s:bold"\n' "$sz" "$HOME" "$fam" "$sz"
 		done
 		;;
 esac
