@@ -1,4 +1,4 @@
-/* bytevol - volume OSD daemon with perceptual loudness curve */
+/* bytevol - volume OSD daemon controlling the active PipeWire sink */
 #define _POSIX_C_SOURCE 200809L
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -11,7 +11,6 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <time.h>
-#include <math.h>
 #include <sys/stat.h>
 #include "appfont.h"
 
@@ -21,7 +20,7 @@ static GC gc;
 static AppFont *afont;
 static int bh, sw, sh;
 static int level = -1;   /* displayed volume 0-100, -1 = hidden */
-static int cur = 50;     /* ground-truth level 0-100 from amixer */
+static int cur = 50;     /* ground-truth level 0-100 from wpctl */
 static int muted = 0;
 static time_t shown_time = 0;
 
@@ -34,9 +33,6 @@ static const char *level_file = "/tmp/bytevol_level";
 
 #define HIDE_AFTER  2
 #define STEP        10
-
-/* logarithmic loudness curve: 100%->0dB, 90%->-2dB, 50%->-13.5dB, 20%->-31.5dB */
-#define CURVE_MAXDB 90.0
 
 static unsigned long fgcol, bgcol, barcol, bordercol;
 static XftColor fc_fg;
@@ -51,22 +47,6 @@ getcol(const char *c)
 	return xc.pixel;
 }
 
-static double
-db_from_level(int lvl)
-{
-	if (lvl <= 0) return -CURVE_MAXDB;
-	if (lvl >= 100) return 0.0;
-	return CURVE_MAXDB * log10(lvl / 100.0) / 2.0;
-}
-
-static int
-level_from_db(double db)
-{
-	if (db >= 0) return 100;
-	if (db <= -CURVE_MAXDB) return 0;
-	return (int)lround(100.0 * pow(10.0, db * 2.0 / CURVE_MAXDB));
-}
-
 static void
 run_cmd(const char *fmt, double a)
 {
@@ -76,47 +56,26 @@ run_cmd(const char *fmt, double a)
 	if (fp) pclose(fp);
 }
 
-/* read current volume/dB/mute from amixer */
+/* read volume (0-1) and mute of the active PipeWire sink */
 static void
 get_volume(void)
 {
-	FILE *fp = popen("amixer get Master 2>/dev/null", "r");
+	FILE *fp = popen("wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null", "r");
 	if (!fp) return;
 	char line[256];
 	int v = -1;
 	int m = 0;
-	int have_db = 0;
-	double db = 0.0;
 	while (fgets(line, sizeof(line), fp)) {
-		char *p = strstr(line, "[");
-		if (!p) continue;
-		char *q = strchr(p, '%');
-		if (!q) continue;
-		if (q - p > 4) continue;
-		char buf[8];
-		int n = (int)(q - p - 1);
-		if (n < 1 || n > 3) continue;
-		memcpy(buf, p + 1, (size_t)n);
-		buf[n] = '\0';
-		v = atoi(buf);
-		if (strstr(line, "[off]")) m = 1;
-		char *dbp = strstr(line, "dB]");
-		if (dbp && dbp - line >= 2) {
-			/* [X.XXdB] */
-			char *sp = dbp - 2;
-			while (sp > line && *sp != '[') sp--;
-			if (*sp == '[') { db = atof(sp + 1); have_db = 1; }
-		}
+		double vol;
+		if (sscanf(line, "Volume: %lf", &vol) != 1) continue;
+		v = (int)(vol * 100.0 + 0.5);
+		if (strstr(line, "[MUTED]")) m = 1;
 		break;
 	}
 	pclose(fp);
 	if (v < 0) v = 0;
 	if (v > 100) v = 100;
-	/* prefer dB->level; fall back to raw % if dB unavailable */
-	if (have_db)
-		cur = level_from_db(db);
-	else
-		cur = v;
+	cur = v;
 	if (level < 0) level = cur;
 	muted = m;
 }
@@ -195,7 +154,7 @@ show(void)
 	draw();
 }
 
-/* apply target perceptual level via relative dB deltas */
+/* apply target volume via absolute wpctl set-volume (0-1) */
 static void
 set_level(int newlevel)
 {
@@ -208,28 +167,7 @@ set_level(int newlevel)
 	muted = 0;
 	write_level_file();
 
-	double target = db_from_level(level);
-	FILE *fp = popen("amixer get Master 2>/dev/null", "r");
-	double curdb = 0.0;
-	if (fp) {
-		char line[256];
-		while (fgets(line, sizeof(line), fp)) {
-			char *dbp = strstr(line, "dB]");
-			if (dbp && dbp - line >= 2) {
-				char *sp = dbp - 2;
-				while (sp > line && *sp != '[') sp--;
-				if (*sp == '[') curdb = atof(sp + 1);
-			}
-		}
-		pclose(fp);
-	}
-
-	double delta = target - curdb;
-	run_cmd("amixer set Master unmute >/dev/null 2>&1", 0);
-	if (delta > 0.5)
-		run_cmd("amixer set Master %.1fdB+ >/dev/null 2>&1", delta);
-	else if (delta < -0.5)
-		run_cmd("amixer set Master %.1fdB- >/dev/null 2>&1", -delta);
+	run_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ %.2f", newlevel / 100.0);
 
 	shown_time = time(NULL);
 	draw();
@@ -238,7 +176,12 @@ set_level(int newlevel)
 static void
 toggle_mute(void)
 {
-	run_cmd("amixer set Master toggle >/dev/null 2>&1", 0);
+	/* publish intent first so the bar updates instantly (the status
+	   fifo ping arrives before wpctl's async state settles) */
+	muted = !muted;
+	write_level_file();
+
+	run_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle", 0);
 	get_volume();
 	write_level_file();
 	shown_time = time(NULL);

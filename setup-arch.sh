@@ -19,6 +19,7 @@ echo "==> bytewm setup for Arch Linux"
 echo "==> Installing packages..."
 sudo pacman -S --needed --noconfirm \
   base-devel libx11 libxft fontconfig freetype2 xorg-server xorg-xinit alsa-utils alsa-lib alsa-plugins \
+  pipewire pipewire-pulse pipewire-alsa wireplumber \
   feh xorg-xrdb xorg-xrandr xorg-fonts-misc pam git ttf-dejavu terminus-font \
   smartmontools bat fish neovim ranger
 
@@ -54,30 +55,20 @@ if [ ! -f /etc/sudoers.d/bytewm ]; then
 fi
 echo "     done"
 
-echo "==> ALSA direct audio (bit-perfect)"
+echo "==> Audio setup (PipeWire + ALSA)"
+echo "     PipeWire provides systemwide audio; pipewire-alsa routes ALSA"
+echo "     \"default\" through PipeWire so all apps follow the active sink."
+echo "     (No /etc/asound.conf pcm.!default override - that would bypass it.)"
 cards=$(aplay -l 2>/dev/null | sed -nE 's/^card ([0-9]+): ([^[]+).*/\1|\2/p' | awk '!seen[$1]++' | sed -E 's/[[:space:]]+$//')
 if [ -z "$cards" ]; then
-  echo "WARNING: no audio card found — skipping audio setup"
+  echo "WARNING: no audio card found — skipping mixer setup"
 else
-  n=$(printf '%s\n' "$cards" | wc -l)
-  if [ "$n" -eq 1 ]; then
-    idx=${cards%%|*}
-    name=${cards#*|}
-  else
-    echo "  Detected audio cards:"
-    printf '%s\n' "$cards" | sed -E 's/^([0-9]+)\|/    card \1: /'
-    read -p "  Enter card number [0] " idx
-    [ -z "$idx" ] && idx=0
-    name=$(printf '%s\n' "$cards" | sed -nE "s/^$idx\|(.*)$/\1/p")
-    [ -z "$name" ] && name=$idx
-  fi
-  echo "  Setting default audio card: $name"
+  idx=${cards%%|*}
+  name=${cards#*|}
+  echo "  Default audio card: $name"
+  # leave pcm.!default alone (pipewire-alsa owns it); only ensure mixer state
   sudo tee /etc/asound.conf >/dev/null <<EOF
-# default audio device -> ALSA plug+dmix (format conversion + mixing)
-pcm.!default {
-    type plug
-    slave.pcm "dmix"
-}
+# mixer control -> the chosen card (playback stays on PipeWire's default)
 ctl.!default {
     type hw
     card "$name"
@@ -102,7 +93,6 @@ ranger --copy-config=all 2>/dev/null || true
 echo "==> Restoring dotfiles..."
 cp -a dotfiles/.bashrc dotfiles/.bash_profile dotfiles/.bash_logout "$HOME/" 2>/dev/null || true
 cp -a dotfiles/.xinitrc dotfiles/.fehbg "$HOME/" 2>/dev/null || true
-cp -a dotfiles/.asoundrc "$HOME/" 2>/dev/null || true
 cp -a dotfiles/.config/fish "$HOME/.config/" 2>/dev/null || true
 cp -a dotfiles/.config/ranger "$HOME/.config/" 2>/dev/null || true
 cp -a dotfiles/.config/opencode "$HOME/.config/" 2>/dev/null || true
