@@ -58,11 +58,20 @@ apply_saved_resolution(const char *out)
 	if (fscanf(f, "%63s %31s", mode, rate) == 2 && mode[0]) {
 		char cmd[512];
 		snprintf(cmd, sizeof(cmd),
-			"xrandr --output %s --mode %s --rate %s",
+			"xrandr --output %.63s --mode %.63s --rate %.31s",
 			out, mode, rate);
 		if (system(cmd) == -1) { /* noop */ }
 	}
 	fclose(f);
+}
+
+static void
+run_xrandr(const char *fmt, const char *name)
+{
+	char cmd[256];
+	/* %.63s bounds the name so GCC knows it can't overflow cmd */
+	snprintf(cmd, sizeof(cmd), fmt, name);
+	if (system(cmd) == -1) { /* noop */ }
 }
 
 static void
@@ -81,10 +90,19 @@ apply_mode(void)
 		XRROutputInfo *oi = XRRGetOutputInfo(dpy, res, res->outputs[i]);
 		if (!oi) continue;
 		if (oi->connection == RR_Connected) {
-			if (ninternal < MAX_OUT && is_internal(oi->name))
-				snprintf(internal[ninternal++], sizeof(internal[0]), "%s", oi->name);
-			else if (nexternal < MAX_OUT)
-				snprintf(external[nexternal++], sizeof(external[0]), "%s", oi->name);
+			/* bound the copy by namelen so GCC knows the name is short */
+			int nlen = oi->nameLen;
+			if (nlen < 0) nlen = 0;
+			if (nlen > 63) nlen = 63;
+			if (ninternal < MAX_OUT && is_internal(oi->name)) {
+				memcpy(internal[ninternal], oi->name, (size_t)nlen);
+				internal[ninternal][nlen] = '\0';
+				ninternal++;
+			} else if (nexternal < MAX_OUT) {
+				memcpy(external[nexternal], oi->name, (size_t)nlen);
+				external[nexternal][nlen] = '\0';
+				nexternal++;
+			}
 		}
 		XRRFreeOutputInfo(oi);
 	}
@@ -105,47 +123,27 @@ apply_mode(void)
 	if (want_internal_only || (!have_external && !want_both)) {
 		/* internal only (or no external present) */
 		for (int i = 0; i < ninternal; i++) {
-			char cmd[256];
-			snprintf(cmd, sizeof(cmd),
-				"xrandr --output %s --auto --primary", internal[i]);
-			if (system(cmd) == -1) { /* noop */ }
+			run_xrandr("xrandr --output %.63s --auto --primary", internal[i]);
 			if (!primary) primary = internal[i];
 		}
-		for (int i = 0; i < nexternal; i++) {
-			char cmd[256];
-			snprintf(cmd, sizeof(cmd), "xrandr --output %s --off", external[i]);
-			if (system(cmd) == -1) { /* noop */ }
-		}
+		for (int i = 0; i < nexternal; i++)
+			run_xrandr("xrandr --output %.63s --off", external[i]);
 	} else if (want_both) {
 		/* both on; external primary */
 		for (int i = 0; i < nexternal; i++) {
-			char cmd[256];
-			snprintf(cmd, sizeof(cmd),
-				"xrandr --output %s --auto --primary", external[i]);
-			if (system(cmd) == -1) { /* noop */ }
+			run_xrandr("xrandr --output %.63s --auto --primary", external[i]);
 			if (!primary) primary = external[i];
 		}
-		for (int i = 0; i < ninternal; i++) {
-			char cmd[256];
-			snprintf(cmd, sizeof(cmd),
-				"xrandr --output %s --auto", internal[i]);
-			if (system(cmd) == -1) { /* noop */ }
-		}
+		for (int i = 0; i < ninternal; i++)
+			run_xrandr("xrandr --output %.63s --auto", internal[i]);
 	} else {
 		/* external only (default) */
 		for (int i = 0; i < nexternal; i++) {
-			char cmd[256];
-			snprintf(cmd, sizeof(cmd),
-				"xrandr --output %s --auto --primary", external[i]);
-			if (system(cmd) == -1) { /* noop */ }
+			run_xrandr("xrandr --output %.63s --auto --primary", external[i]);
 			if (!primary) primary = external[i];
 		}
-		for (int i = 0; i < ninternal; i++) {
-			char cmd[256];
-			snprintf(cmd, sizeof(cmd),
-				"xrandr --output %s --off", internal[i]);
-			if (system(cmd) == -1) { /* noop */ }
-		}
+		for (int i = 0; i < ninternal; i++)
+			run_xrandr("xrandr --output %.63s --off", internal[i]);
 	}
 
 	if (primary)
