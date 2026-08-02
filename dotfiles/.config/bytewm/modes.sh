@@ -14,7 +14,10 @@ case "$1" in
 		'
 		;;
 	*)
-		OUT=$(xrandr --current 2>/dev/null | awk '/ connected/{print $1; exit}')
+		# prefer the primary output (matches bytewm-disp); the laptop panel
+		# stays listed as "connected" when --off, so first-connected is wrong
+		OUT=$(xrandr --current 2>/dev/null | awk '/ primary/{print $1; exit}')
+		[ -z "$OUT" ] && OUT=$(xrandr --current 2>/dev/null | awk '/ connected/{print $1; exit}')
 		[ -z "$OUT" ] && exit 0
 		xrandr --current 2>/dev/null | awk -v home="$HOME" '
 			/ connected/ {next}

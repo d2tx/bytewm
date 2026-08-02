@@ -1,7 +1,7 @@
 # bytewm - retro tiling window manager
 include config.mk
 
-APPBINS = bytify bytelaunch bytesnap bytevol bytewm-exit bytekill bytelock bytepass bytefetch bytepick bytemenu byteswitch
+APPBINS = bytify bytelaunch bytesnap bytevol bytewm-exit bytekill bytelock bytepass bytefetch bytepick bytemenu byteswitch bytewm-disp
 
 all: bytewm apps bytewdm bytekill bytelock bytepass bytefetch bytepick
 
@@ -16,7 +16,11 @@ APPS_CFLAGS = -std=c99 -pedantic -Wall -Os -Iapps $(X11INCS)
 apps:
 	@for app in $(APPBINS); do \
 		if [ -f apps/$$app.c ]; then \
-			$(CC) $(APPS_CFLAGS) -o apps/$$app apps/$$app.c apps/appfont.c -lX11 -lXft -lm; \
+			if [ "$$app" = "bytewm-disp" ]; then \
+				$(CC) $(APPS_CFLAGS) -o apps/$$app apps/$$app.c -lX11 -lXrandr; \
+			else \
+				$(CC) $(APPS_CFLAGS) -o apps/$$app apps/$$app.c apps/appfont.c -lX11 -lXft -lm; \
+			fi; \
 		fi; \
 	done
 

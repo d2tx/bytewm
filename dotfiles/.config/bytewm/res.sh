@@ -1,6 +1,9 @@
 #!/bin/sh
 # bytewm settings helper: set resolution (+ optional refresh rate) and remember it
-OUT=$(xrandr --current 2>/dev/null | awk '/ connected/{print $1; exit}')
+# prefer the primary output (matches bytewm-disp); the laptop panel stays
+# listed as "connected" when --off, so first-connected is wrong
+OUT=$(xrandr --current 2>/dev/null | awk '/ primary/{print $1; exit}')
+[ -z "$OUT" ] && OUT=$(xrandr --current 2>/dev/null | awk '/ connected/{print $1; exit}')
 [ -z "$OUT" ] && exit 1
 if [ -n "$2" ]; then
 	xrandr --output "$OUT" --mode "$1" --rate "$2" 2>/dev/null

@@ -31,6 +31,12 @@ rm -f /tmp/bytevol.fifo
 mkfifo /tmp/bytevol.fifo
 bytevol &
 
+# monitor hotplug daemon (external display takes over, like Windows)
+pkill bytewm-disp 2>/dev/null
+rm -f /tmp/bytewm-disp.fifo
+mkfifo /tmp/bytewm-disp.fifo
+bytewm-disp &
+
 # music player daemon (for ncmpcpp)
 pkill mpd 2>/dev/null
 mpd ~/.config/mpd/mpd.conf &
