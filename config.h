@@ -50,7 +50,7 @@ static const char *menucmd2[] = { "bytemenu", NULL };
 static const char *lockcmd[]  = { "bytelock", NULL };
 static const char *audioswitchcmd[] = { "/bin/sh", "-c", "$HOME/.config/bytewm/audio-switch.sh next", NULL };
 
-static const char *scratchpadcmd[] = { "st", "-t", "scratchpad", "-c", "scratchpad", NULL };
+static const char *scratchpadcmd[] = { "st", "-t", "scratchpad", "-c", "scratchpad", "-e", "ranger", NULL };
 
 static const Key keys[] = {
 	{ MODKEY,                       XK_p,      spawn,          {.v = menucmd } },

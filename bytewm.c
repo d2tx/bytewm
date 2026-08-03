@@ -1878,14 +1878,7 @@ manage(Window w, XWindowAttributes *wa)
 			}
 			scratchpad = c;
 			scratchpad->tags = 0;
-			scratchpad->isfloating = 1;
 			scratchpad->bw = 2;
-			scratchpad->x = selmon->wx + selmon->ww * 0.39;
-			scratchpad->y = selmon->wy + selmon->wh * 0.15;
-			scratchpad->w = selmon->ww * 0.22;
-			scratchpad->h = selmon->wh * 0.2;
-			resizeclient(c, scratchpad->x, scratchpad->y,
-			             scratchpad->w, scratchpad->h);
 		}
 		if (ch.res_class) XFree(ch.res_class);
 		if (ch.res_name) XFree(ch.res_name);
