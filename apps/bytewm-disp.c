@@ -7,7 +7,7 @@
  *   /tmp/bytewm-disp.fifo  external  -> external only (default behavior)
  *                          both      -> internal + external together
  *                          internal  -> internal only
- *                          cycle     -> external -> both -> external
+ *                          cycle     -> external <-> internal (native res)
  *                          status    -> print current mode to stderr
  *
  * Internal panel is identified by output name (eDP / LVDS / IDP prefix). Everything
@@ -401,7 +401,7 @@ handle_command(const char *buf)
 	if (!strcmp(buf, "external")) curmode = 0;
 	else if (!strcmp(buf, "both"))   curmode = 1;
 	else if (!strcmp(buf, "internal")) curmode = 2;
-	else if (!strcmp(buf, "cycle")) curmode = (curmode == 0) ? 1 : 0;
+	else if (!strcmp(buf, "cycle")) curmode = (curmode == 0) ? 2 : 0;
 	else if (!strcmp(buf, "status")) {
 		fprintf(stderr, "bytewm-disp: mode=%s\n",
 			curmode == 0 ? "external" : curmode == 1 ? "both" : "internal");
