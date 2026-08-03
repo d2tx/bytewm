@@ -81,7 +81,7 @@ static int nav_depth;
 static char *game_exe[MAX_SUBITEMS];
 static char *game_proton[MAX_SUBITEMS];
 static char *game_extra[MAX_SUBITEMS];
-static char game_cmd_buf[MAX_SUBITEMS][4096];
+static char game_cmd_buf[MAX_SUBITEMS][8192];
 
 static char lockpath[256];
 static int lockacquired;
@@ -196,10 +196,23 @@ static void build_game_command(int idx) {
 	else
 		snprintf(prefix_expanded, sizeof(prefix_expanded), "%s", wineprefix);
 
-	snprintf(game_cmd_buf[idx], 4096,
-		"%s WINEPREFIX='%s' PROTONPATH='%s' umu-run '%s'",
-		game_extra[idx] ? game_extra[idx] : "",
-		prefix_expanded, proton_expanded, exe_expanded);
+	/* proton path of "wine" = run with the system wine directly
+	   (old D3D8/D3D9 games often work better with plain wine's
+	   wined3d than with Proton's DXVK); no WINEPREFIX is forced so
+	   wine uses its default prefix. Always cd into the game directory
+	   first: many old games load their data files relative to the
+	   current working directory, not the exe path. */
+	if (!strcmp(proton_expanded, "wine")) {
+		snprintf(game_cmd_buf[idx], sizeof(game_cmd_buf[idx]),
+			"%s cd '%s' && wine '%s'",
+			game_extra[idx] ? game_extra[idx] : "",
+			prefix_expanded, exe_expanded);
+	} else {
+		snprintf(game_cmd_buf[idx], sizeof(game_cmd_buf[idx]),
+			"%s cd '%s' && WINEPREFIX='%s' PROTONPATH='%s' umu-run '%s'",
+			game_extra[idx] ? game_extra[idx] : "",
+			prefix_expanded, prefix_expanded, proton_expanded, exe_expanded);
+	}
 }
 
 static void sort_games(struct submenu *s) {

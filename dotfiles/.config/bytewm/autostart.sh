@@ -1,6 +1,9 @@
 #!/bin/sh
 # bytewm autostart
 
+# compositor (vsync) - fixes screen tearing
+picom &
+
 # load saved Xresources (st.font, st colors) into the X server
 xrdb -merge "$HOME/.Xresources" 2>/dev/null
 

@@ -21,7 +21,7 @@ sudo pacman -S --needed --noconfirm \
   base-devel libx11 libxft fontconfig freetype2 xorg-server xorg-xinit alsa-utils alsa-lib alsa-plugins \
   pipewire pipewire-pulse pipewire-alsa wireplumber \
   feh xorg-xrdb xorg-xrandr xorg-fonts-misc pam git ttf-dejavu terminus-font \
-  smartmontools bat fish neovim ranger
+  smartmontools bat fish neovim ranger picom
 
 echo "==> Rebuilding font cache (ensures bitmap/Xft fonts are registered)..."
 fc-cache -f 2>/dev/null || true
