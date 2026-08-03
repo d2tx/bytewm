@@ -19,9 +19,6 @@ mem_used=${mem##* }
 cputemp=$(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | head -1)
 [ -n "$cputemp" ] && cputemp=$((cputemp/1000)) || cputemp=""
 
-# GPU temp (AMD)
-gputemp=$(cat /sys/class/drm/card*/device/hwmon/hwmon*/temp1_input 2>/dev/null | head -1)
-[ -n "$gputemp" ] && gputemp=$((gputemp/1000)) || gputemp=""
 
 # NVMe info
 # NVMe disk usage
@@ -101,6 +98,5 @@ printf "VOL %s" "$vol"
 printf " | VPN %s" "$vpn"
 printf " | CPU %d%% | MEM %s" "$cpu" "${mem_used}/${mem_total}M"
 [ -n "$cputemp" ] && printf " | CPU %d°C" "$cputemp"
-[ -n "$gputemp" ] && printf " | GPU %d°C" "$gputemp"
 [ -n "$nvme" ] && printf " | %s" "$nvme"
 printf " | %s" "$datetime"
