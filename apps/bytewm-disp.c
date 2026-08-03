@@ -44,7 +44,9 @@ is_internal(const char *name)
 		 strncmp(name, "IDP", 3) == 0);
 }
 
-/* apply saved resolution (~/.config/bytewm/resolution: "MODE RATE") to OUT */
+/* apply saved resolution (~/.config/bytewm/resolution: "OUTPUT MODE RATE")
+   but only if the line is for OUT - resolutions are per-output so the
+   laptop panel never inherits the external monitor's saved mode */
 static void
 apply_saved_resolution(const char *out)
 {
@@ -54,8 +56,9 @@ apply_saved_resolution(const char *out)
 	snprintf(path, sizeof(path), "%s/.config/bytewm/resolution", home);
 	FILE *f = fopen(path, "r");
 	if (!f) return;
-	char mode[64] = "", rate[32] = "";
-	if (fscanf(f, "%63s %31s", mode, rate) == 2 && mode[0]) {
+	char sout[64] = "", mode[64] = "", rate[32] = "";
+	if (fscanf(f, "%63s %63s %31s", sout, mode, rate) == 3 &&
+	    !strcmp(sout, out) && mode[0]) {
 		char cmd[512];
 		snprintf(cmd, sizeof(cmd),
 			"xrandr --output %.63s --mode %.63s --rate %.31s",

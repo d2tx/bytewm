@@ -4,12 +4,12 @@
 # load saved Xresources (st.font, st colors) into the X server
 xrdb -merge "$HOME/.Xresources" 2>/dev/null
 
-# reapply saved resolution + refresh rate
+# reapply saved resolution + refresh rate (per-output: "OUTPUT MODE RATE")
 if [ -f ~/.config/bytewm/resolution ]; then
-	read resmode resrate < ~/.config/bytewm/resolution
-	[ -n "$resmode" ] && [ -n "$resrate" ] && \
-		OUT=$(xrandr --current 2>/dev/null | awk '/ connected/{print $1; exit}') && \
-		[ -n "$OUT" ] && xrandr --output "$OUT" --mode "$resmode" --rate "$resrate" 2>/dev/null
+	read saved_out saved_mode saved_rate < ~/.config/bytewm/resolution
+	[ -n "$saved_out" ] && [ -n "$saved_mode" ] && \
+		xrandr --current 2>/dev/null | grep -q "^$saved_out connected" && \
+		xrandr --output "$saved_out" --mode "$saved_mode" --rate "$saved_rate" 2>/dev/null
 fi
 
 # wallpaper (checks .png first, then .jpg)
