@@ -293,6 +293,7 @@ main(int argc, char *argv[])
 	get_volume();
 	write_level_file();
 
+	time_t last_refresh = time(NULL);
 	while (1) {
 		FD_ZERO(&fds);
 		FD_SET(xfd, &fds);
@@ -354,6 +355,29 @@ main(int argc, char *argv[])
 		if (level >= 0 && time(NULL) - shown_time >= HIDE_AFTER) {
 			level = -1;
 			draw();
+		}
+
+		/* Periodically re-read the real volume. The initial read at
+		   startup can fail when PipeWire isn't ready yet (boot race),
+		   which used to leave /tmp/bytevol_level stuck at 0 and the
+		   bar showing VOL 0% until bytevol was restarted. Refresh the
+		   level file from the live value (cur) so it self-corrects
+		   within a couple of seconds. The OSD's `level` is left alone
+		   so this never pops up the volume overlay. */
+		if (time(NULL) - last_refresh >= 2) {
+			last_refresh = time(NULL);
+			get_volume();
+			int rfd = open(level_file,
+				O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW | O_CLOEXEC, 0644);
+			if (rfd >= 0) {
+				char rbuf[16];
+				int rn = muted
+					? snprintf(rbuf, sizeof(rbuf), "MUTE\n")
+					: snprintf(rbuf, sizeof(rbuf), "%d\n", cur);
+				if (rn > 0 && (size_t)rn < sizeof(rbuf))
+					(void)write(rfd, rbuf, (size_t)rn);
+				close(rfd);
+			}
 		}
 	}
 
