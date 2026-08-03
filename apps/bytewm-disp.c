@@ -140,10 +140,31 @@ apply_saved_resolution(const char *out)
 	fclose(f);
 }
 
+/* re-apply the wallpaper after a resolution change. feh --bg-fill
+   scales to the screen size at the moment it runs; if the display
+   switches to a bigger resolution the old (smaller) background pixmap
+   gets TILED across the root window instead of stretched. Re-running
+   it after every apply_mode fixes the tiling on switch. */
+static void
+apply_wallpaper(void)
+{
+	const char *home = getenv("HOME");
+	if (!home) return;
+	char path[512];
+	snprintf(path, sizeof(path), "%s/.config/bytewm/wallpaper.png", home);
+	if (access(path, F_OK) != 0) {
+		snprintf(path, sizeof(path), "%s/.config/bytewm/wallpaper.jpg", home);
+		if (access(path, F_OK) != 0)
+			return;
+	}
+	char cmd[768];
+	snprintf(cmd, sizeof(cmd), "feh --bg-fill %.511s", path);
+	if (system(cmd) == -1) { /* noop */ }
+}
+
 static void
 run_xrandr(const char *fmt, const char *name)
-{
-	char cmd[256];
+{	char cmd[256];
 	/* %.63s bounds the name so GCC knows it can't overflow cmd */
 	snprintf(cmd, sizeof(cmd), fmt, name);
 	int rc = system(cmd);
@@ -393,6 +414,10 @@ apply_mode(void)
 			}
 		}
 	}
+
+	/* screen size may have changed: rescale the wallpaper to the new
+	   resolution so it doesn't tile across the root window */
+	apply_wallpaper();
 }
 
 static void
