@@ -197,7 +197,7 @@ static void build_game_command(int idx) {
 		snprintf(prefix_expanded, sizeof(prefix_expanded), "%s", wineprefix);
 
 	snprintf(game_cmd_buf[idx], 4096,
-		"%s WINEPREFIX=%s PROTONPATH=%s umu-run %s",
+		"%s WINEPREFIX='%s' PROTONPATH='%s' umu-run '%s'",
 		game_extra[idx] ? game_extra[idx] : "",
 		prefix_expanded, proton_expanded, exe_expanded);
 }
@@ -285,12 +285,8 @@ static void load_games(struct submenu *s) {
 			proton_path = exe_path;
 		} else {
 			*proton_path++ = 0;
-			char *ep = strchr(proton_path, '|');
-			if (ep) {
-				*ep++ = 0;
-				while (*ep == ' ') ep++;
-				if (*ep) extra = ep;
-			}
+			while (*proton_path == ' ') proton_path++;
+			if (*proton_path) extra = proton_path;
 		}
 		/* trim spaces */
 		while (*p == ' ') p++;
@@ -300,7 +296,9 @@ static void load_games(struct submenu *s) {
 		int idx = s->count;
 		s->labels[idx] = strdup(line);
 		game_exe[idx] = strdup(p);
-		game_proton[idx] = strdup(proton_path);
+		/* exe_path holds the proton path (truncated at the 4th '|');
+		   proton_path points past it at the extra args field */
+		game_proton[idx] = strdup(exe_path);
 		game_extra[idx] = extra ? strdup(extra) : NULL;
 		s->commands[idx] = game_cmd_buf[idx];
 		s->children[idx] = NULL;
