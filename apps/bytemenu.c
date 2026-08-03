@@ -728,19 +728,53 @@ int main(void) {
 			} else if (ks == XK_Down) {
 				int pc = s->fmatch - s->page * per_page;
 				if (pc > per_page) pc = per_page;
-				if (pc > 0) { s->sel = (s->sel + 1) % pc; draw(); }
+				if (pc > 0) {
+					if (s->sel + 1 >= pc && s->page < s->page_max) {
+						s->page++; s->sel = 0;
+					} else {
+						s->sel = (s->sel + 1) % pc;
+					}
+					draw();
+				}
 			} else if (ks == XK_Up) {
 				int pc = s->fmatch - s->page * per_page;
 				if (pc > per_page) pc = per_page;
-				if (pc > 0) { s->sel = (s->sel - 1 + pc) % pc; draw(); }
+				if (pc > 0) {
+					if (s->sel == 0 && s->page > 0) {
+						s->page--;
+						pc = s->fmatch - s->page * per_page;
+						if (pc > per_page) pc = per_page;
+						s->sel = pc - 1;
+					} else {
+						s->sel = (s->sel - 1 + pc) % pc;
+					}
+					draw();
+				}
 			} else if (!s->filter[0] && ks == XK_j) {
 				int pc = s->fmatch - s->page * per_page;
 				if (pc > per_page) pc = per_page;
-				if (pc > 0) { s->sel = (s->sel + 1) % pc; draw(); }
+				if (pc > 0) {
+					if (s->sel + 1 >= pc && s->page < s->page_max) {
+						s->page++; s->sel = 0;
+					} else {
+						s->sel = (s->sel + 1) % pc;
+					}
+					draw();
+				}
 			} else if (!s->filter[0] && ks == XK_k) {
 				int pc = s->fmatch - s->page * per_page;
 				if (pc > per_page) pc = per_page;
-				if (pc > 0) { s->sel = (s->sel - 1 + pc) % pc; draw(); }
+				if (pc > 0) {
+					if (s->sel == 0 && s->page > 0) {
+						s->page--;
+						pc = s->fmatch - s->page * per_page;
+						if (pc > per_page) pc = per_page;
+						s->sel = pc - 1;
+					} else {
+						s->sel = (s->sel - 1 + pc) % pc;
+					}
+					draw();
+				}
 			} else if (ks == XK_bracketright || ks == XK_Tab ||
 			           (!s->filter[0] && (ks == XK_l || ks == XK_Right))) {
 				if (s->page < s->page_max) { s->page++; s->sel = 0; draw(); }
