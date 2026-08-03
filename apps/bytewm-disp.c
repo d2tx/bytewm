@@ -33,15 +33,64 @@ static Display *dpy;
 static int rrev_base = 0;     /* RandR event base */
 static int have_rr = 0;
 static int curmode = 0;       /* 0=external, 1=both, 2=internal */
+static char last_conn[MAX_OUT][64];  /* last known connection state per output */
+static int last_nconn = 0;
+
+/* true if the set of connected outputs changed since we last recorded it
+   (hotplug). Pure mode/resolution changes (e.g. bytemenu picking a new res)
+   must NOT trigger a re-apply or they'd be instantly reverted. */
+static int
+connection_changed(void)
+{
+	Window root = RootWindow(dpy, DefaultScreen(dpy));
+	XRRScreenResources *res = XRRGetScreenResources(dpy, root);
+	if (!res) return 0;
+
+	char cur[MAX_OUT][64];
+	int ncur = 0;
+	for (int i = 0; i < res->noutput && ncur < MAX_OUT; i++) {
+		XRROutputInfo *oi = XRRGetOutputInfo(dpy, res, res->outputs[i]);
+		if (!oi) continue;
+		if (oi->connection == RR_Connected) {
+			int nlen = oi->nameLen;
+			if (nlen < 0) nlen = 0;
+			if (nlen > 63) nlen = 63;
+			memcpy(cur[ncur], oi->name, (size_t)nlen);
+			cur[ncur][nlen] = '\0';
+			ncur++;
+		}
+		XRRFreeOutputInfo(oi);
+	}
+	XRRFreeScreenResources(res);
+
+	int changed = (ncur != last_nconn);
+	if (!changed) {
+		for (int i = 0; i < ncur; i++)
+			if (strcmp(cur[i], last_conn[i]) != 0) { changed = 1; break; }
+	}
+
+	if (changed) {
+		for (int i = 0; i < ncur; i++)
+			snprintf(last_conn[i], sizeof(last_conn[0]), "%s", cur[i]);
+		last_nconn = ncur;
+	}
+	return changed;
+}
 
 static int
 is_internal(const char *name)
 {
-	return name &&
-		(strncmp(name, "eDP", 3) == 0 ||
-		 strncmp(name, "EDP", 3) == 0 ||
-		 strncmp(name, "LVDS", 4) == 0 ||
-		 strncmp(name, "IDP", 3) == 0);
+	if (!name) return 0;
+	/* explicitly external connector types - never the internal panel */
+	if (strncmp(name, "HDMI", 4) == 0 || strncmp(name, "DVI", 3) == 0 ||
+	    strncmp(name, "VGA", 3) == 0 ||
+	    strncmp(name, "DisplayPort", 11) == 0 ||
+	    strncmp(name, "DP-", 3) == 0)
+		return 0;
+	/* everything else defaults to internal - laptops name their panels
+	   eDP/LVDS/LCD/IDP etc, but unusual names must not be treated as
+	   external (which would force the saved external res onto the panel) */
+	return 1;
 }
 
 /* apply saved resolution (~/.config/bytewm/resolution: "OUTPUT MODE RATE")
@@ -199,6 +248,7 @@ main(void)
 		RROutputChangeNotifyMask | RRScreenChangeNotifyMask);
 
 	/* initial application of policy */
+	connection_changed();   /* seed the recorded connection state */
 	apply_mode();
 
 	/* open fifo (create if missing) */
@@ -232,7 +282,8 @@ main(void)
 				if (have_rr && ev.type == rrev_base + RRNotify) {
 					XRRUpdateConfiguration(&ev);
 					XRRNotifyEvent *rne = (XRRNotifyEvent *)&ev;
-					if (rne->subtype == RRNotify_OutputChange)
+					if (rne->subtype == RRNotify_OutputChange &&
+					    connection_changed())
 						apply_mode();
 				}
 			}
