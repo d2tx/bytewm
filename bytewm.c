@@ -268,6 +268,7 @@ unsigned int numlockmask = 0;
 int (*xerrorxlib)(Display *, XErrorEvent *);
 volatile sig_atomic_t running = 1;
 static volatile sig_atomic_t restart = 0;
+static volatile sig_atomic_t byteswitch_pid = 0;
 static char crash_logpath[512];
 static int showdate = 0;
 XftFont *xfont;
@@ -1415,6 +1416,21 @@ togglescratch(const Arg *arg)
 void
 spawn(const Arg *arg)
 {
+	/* single-instance guard for the window switcher: while the
+	   byteswitch process we spawned is still running, ignore repeat
+	   or fast Alt+Tab instead of forking a second instance that would
+	   fight over the keyboard grab. The pid is cleared by sigchld()
+	   when the process exits. byteswitch itself is untouched, so its
+	   startup/grab timing is exactly the original. */
+	if (((char **)arg->v)[0]
+	    && !strcmp(((char **)arg->v)[0], "byteswitch")) {
+		if (byteswitch_pid != 0) {
+			if (kill(byteswitch_pid, 0) == 0)
+				return;                  /* still running: skip */
+			byteswitch_pid = 0;          /* stale pid: recover */
+		}
+	}
+
 	pid_t pid = fork();
 	if (pid == 0) {
 		if (dpy) close(ConnectionNumber(dpy));
@@ -1425,6 +1441,9 @@ spawn(const Arg *arg)
 		_exit(1);
 	} else if (pid < 0) {
 		fprintf(stderr, "bytewm: fork failed: %s\n", strerror(errno));
+	} else if (((char **)arg->v)[0]
+	           && !strcmp(((char **)arg->v)[0], "byteswitch")) {
+		byteswitch_pid = pid;
 	}
 }
 
@@ -2737,7 +2756,13 @@ void
 sigchld(int unused)
 {
 	(void)unused;
-	while (waitpid(-1, NULL, WNOHANG) > 0);
+	while (1) {
+		pid_t pid = waitpid(-1, NULL, WNOHANG);
+		if (pid <= 0)
+			break;
+		if (pid == byteswitch_pid)
+			byteswitch_pid = 0;
+	}
 }
 
 static void
