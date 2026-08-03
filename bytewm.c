@@ -485,14 +485,19 @@ updatenumlockmask(void)
 void
 grabkeys(void)
 {
-	KeyCode code;
 	unsigned int mods[] = { 0, LockMask, numlockmask, numlockmask | LockMask };
 	XUngrabKey(dpy, AnyKey, AnyModifier, root);
 	for (int i = 0; i < LENGTH(keys); i++) {
-		if ((code = XKeysymToKeycode(dpy, keys[i].keysym))) {
-			for (int j = 0; j < LENGTH(mods); j++)
-				XGrabKey(dpy, code, keys[i].mod | mods[j], root, True,
-					GrabModeAsync, GrabModeAsync);
+		/* grab EVERY keycode that resolves to the keysym - external
+		   keyboards can map the same keysym to a different keycode */
+		for (int kc = 8; kc < 256; kc++) {
+			if (XkbKeycodeToKeysym(dpy, (KeyCode)kc, 0, 0) == keys[i].keysym ||
+			    XkbKeycodeToKeysym(dpy, (KeyCode)kc, 1, 0) == keys[i].keysym) {
+				for (int j = 0; j < LENGTH(mods); j++)
+					XGrabKey(dpy, (KeyCode)kc,
+						keys[i].mod | mods[j], root, True,
+						GrabModeAsync, GrabModeAsync);
+			}
 		}
 	}
 }
@@ -1334,7 +1339,17 @@ updatebars(void)
 	};
 
 	for (Monitor *m = mons; m; m = m->next) {
-		if (m->barwin) continue;
+		if (m->barwin) {
+			/* resize/move existing bar to current monitor geometry */
+			XWindowChanges wc;
+			wc.x = m->mx;
+			wc.y = m->topbar ? m->my : m->my + m->mh - bh;
+			wc.width = m->mw;
+			wc.height = bh;
+			XConfigureWindow(dpy, m->barwin,
+				CWX | CWY | CWWidth | CWHeight, &wc);
+			continue;
+		}
 		m->barwin = XCreateWindow(dpy, root,
 			m->mx, m->topbar ? m->my : m->my + m->mh - bh,
 			m->mw, bh, 0, DefaultDepth(dpy, screen),

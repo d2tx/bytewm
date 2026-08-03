@@ -114,43 +114,46 @@ apply_mode(void)
 	for (int i = 0; i < nexternal; i++)
 		fprintf(stderr, "  external: %s\n", external[i]);
 
-	int want_both = (curmode == 1);
-	int want_internal_only = (curmode == 2);
-	int have_external = (nexternal > 0);
-	const char *primary = NULL;
+ 	int want_both = (curmode == 1);
+ 	int want_internal_only = (curmode == 2);
+ 	int have_external = (nexternal > 0);
+ 	const char *primary = NULL;
+ 	int primary_is_internal = 0;
 
-	/* decide what to light up */
-	if (want_internal_only || (!have_external && !want_both)) {
-		/* internal only (or no external present) */
-		for (int i = 0; i < ninternal; i++) {
-			run_xrandr("xrandr --output %.63s --auto --primary", internal[i]);
-			if (!primary) primary = internal[i];
-		}
-		for (int i = 0; i < nexternal; i++)
-			run_xrandr("xrandr --output %.63s --off", external[i]);
-	} else if (want_both) {
-		/* both on; external primary */
-		for (int i = 0; i < nexternal; i++) {
-			run_xrandr("xrandr --output %.63s --auto --primary", external[i]);
-			if (!primary) primary = external[i];
-		}
-		for (int i = 0; i < ninternal; i++)
-			run_xrandr("xrandr --output %.63s --auto", internal[i]);
-	} else {
-		/* external only (default) */
-		for (int i = 0; i < nexternal; i++) {
-			run_xrandr("xrandr --output %.63s --auto --primary", external[i]);
-			if (!primary) primary = external[i];
-		}
-		for (int i = 0; i < ninternal; i++)
-			run_xrandr("xrandr --output %.63s --off", internal[i]);
-	}
+ 	/* decide what to light up */
+ 	if (want_internal_only || (!have_external && !want_both)) {
+ 		/* internal only (or no external present) */
+ 		for (int i = 0; i < ninternal; i++) {
+ 			run_xrandr("xrandr --output %.63s --auto --primary", internal[i]);
+ 			if (!primary) { primary = internal[i]; primary_is_internal = 1; }
+ 		}
+ 		for (int i = 0; i < nexternal; i++)
+ 			run_xrandr("xrandr --output %.63s --off", external[i]);
+ 	} else if (want_both) {
+ 		/* both on; external primary */
+ 		for (int i = 0; i < nexternal; i++) {
+ 			run_xrandr("xrandr --output %.63s --auto --primary", external[i]);
+ 			if (!primary) primary = external[i];
+ 		}
+ 		for (int i = 0; i < ninternal; i++)
+ 			run_xrandr("xrandr --output %.63s --auto", internal[i]);
+ 	} else {
+ 		/* external only (default) */
+ 		for (int i = 0; i < nexternal; i++) {
+ 			run_xrandr("xrandr --output %.63s --auto --primary", external[i]);
+ 			if (!primary) primary = external[i];
+ 		}
+ 		for (int i = 0; i < ninternal; i++)
+ 			run_xrandr("xrandr --output %.63s --off", internal[i]);
+ 	}
 
-	if (primary)
-		apply_saved_resolution(primary);
+ 	/* never force the saved (external) resolution onto the laptop panel -
+	   the internal display uses its native mode via --auto above */
+ 	if (primary && !primary_is_internal)
+ 		apply_saved_resolution(primary);
 
-	XRRFreeScreenResources(res);
-}
+ 	XRRFreeScreenResources(res);
+ }
 
 static void
 handle_command(const char *buf)
