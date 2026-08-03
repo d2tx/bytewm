@@ -29,7 +29,7 @@ fc-cache -f 2>/dev/null || true
 echo "==> Installing Cozette bitmap font (GitHub release, not AUR)..."
 mkdir -p "$HOME/.local/share/fonts"
 COZETTE_VER="v.1.30.0"
-for f in cozette.otb cozette_hidpi.otb; do
+for f in cozette.otb cozette_hidpi.otb CozetteVector.ttf; do
   if [ ! -f "$HOME/.local/share/fonts/$f" ]; then
     curl -fsSL -o "$HOME/.local/share/fonts/$f" \
       "https://github.com/the-moonwitch/Cozette/releases/download/$COZETTE_VER/$f" \
