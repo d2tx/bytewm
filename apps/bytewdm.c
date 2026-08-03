@@ -25,6 +25,7 @@
 static Display *dpy;
 static int screen, sw, sh, bh, display_num;
 static Window root, win;
+static Pixmap buf;
 static GC gc;
 static XFontStruct *font;
 static unsigned long bg, fg, selcol, red, dimcol, lockcol;
@@ -146,7 +147,8 @@ redraw(void)
 	char line[512];
 	int x, y;
 
-	XClearWindow(dpy, win);
+	XSetForeground(dpy, gc, bg);
+	XFillRectangle(dpy, buf, gc, 0, 0, sw, sh);
 
 	/* centered login box */
 	int boxw = sw * 2 / 3;
@@ -156,14 +158,14 @@ redraw(void)
 	int boxy = (sh - boxh) / 2;
 
 	XSetForeground(dpy, gc, bg);
-	XFillRectangle(dpy, win, gc, boxx, boxy, boxw, boxh);
+	XFillRectangle(dpy, buf, gc, boxx, boxy, boxw, boxh);
 
 	y = boxy + bh + 8;
 
 	/* title */
 	snprintf(line, sizeof line, "bytewm");
 	XSetForeground(dpy, gc, selcol);
-	XDrawString(dpy, win, gc, (sw - textw(line)) / 2, y, line, strlen(line));
+	XDrawString(dpy, buf, gc, (sw - textw(line)) / 2, y, line, strlen(line));
 
 	y += bh + 12;
 
@@ -178,7 +180,7 @@ redraw(void)
 		snprintf(line, sizeof line, "password: %s_", stars);
 	}
 	XSetForeground(dpy, gc, fg);
-	XDrawString(dpy, win, gc, (sw - textw(line)) / 2, y, line, strlen(line));
+	XDrawString(dpy, buf, gc, (sw - textw(line)) / 2, y, line, strlen(line));
 
 	y += bh + 8;
 
@@ -186,7 +188,7 @@ redraw(void)
 	if (failed) {
 		snprintf(line, sizeof line, "Login incorrect");
 		XSetForeground(dpy, gc, red);
-		XDrawString(dpy, win, gc, (sw - textw(line)) / 2, y, line, strlen(line));
+		XDrawString(dpy, buf, gc, (sw - textw(line)) / 2, y, line, strlen(line));
 		y += bh + 4;
 	}
 
@@ -194,7 +196,7 @@ redraw(void)
 	snprintf(line, sizeof line, "[ %s ] (Tab to change)",
 		n_sessions > 0 ? session_names[session_idx] : "bytewm");
 	XSetForeground(dpy, gc, dimcol);
-	XDrawString(dpy, win, gc, (sw - textw(line)) / 2, y, line, strlen(line));
+	XDrawString(dpy, buf, gc, (sw - textw(line)) / 2, y, line, strlen(line));
 
 	/* clock — top right */
 	{
@@ -206,7 +208,7 @@ redraw(void)
 		x = sw - textw(line) - 16;
 		y = 16;
 		XSetForeground(dpy, gc, dimcol);
-		XDrawString(dpy, win, gc, x, y + bh - 4, line, strlen(line));
+		XDrawString(dpy, buf, gc, x, y + bh - 4, line, strlen(line));
 	}
 
 	/* date — under clock */
@@ -219,7 +221,7 @@ redraw(void)
 		x = sw - textw(line) - 16;
 		y = 16 + bh;
 		XSetForeground(dpy, gc, dimcol);
-		XDrawString(dpy, win, gc, x, y + bh - 4, line, strlen(line));
+		XDrawString(dpy, buf, gc, x, y + bh - 4, line, strlen(line));
 	}
 
 	/* lock indicators — top left */
@@ -230,15 +232,16 @@ redraw(void)
 		x = 16;
 		if (leds & 0x1) {
 			XSetForeground(dpy, gc, lockcol);
-			XDrawString(dpy, win, gc, x, y + bh - 4, "CAPS", 4);
+			XDrawString(dpy, buf, gc, x, y + bh - 4, "CAPS", 4);
 			x += textw("CAPS") + 12;
 		}
 		if (leds & 0x2) {
 			XSetForeground(dpy, gc, lockcol);
-			XDrawString(dpy, win, gc, x, y + bh - 4, "NUM", 3);
+			XDrawString(dpy, buf, gc, x, y + bh - 4, "NUM", 3);
 		}
 	}
 
+	XCopyArea(dpy, buf, win, gc, 0, 0, sw, sh, 0, 0);
 	XSync(dpy, 0);
 }
 
@@ -446,6 +449,7 @@ creategreeter(void)
 		DefaultDepth(dpy, screen), CopyFromParent,
 		DefaultVisual(dpy, screen),
 		CWOverrideRedirect | CWBackPixel | CWEventMask, &wa);
+	buf = XCreatePixmap(dpy, root, sw, sh, DefaultDepth(dpy, screen));
 	XMapWindow(dpy, win);
 	XRaiseWindow(dpy, win);
 	XSync(dpy, 0);
@@ -474,6 +478,7 @@ static void
 destroygreeter(void)
 {
 	XDestroyWindow(dpy, win);
+	XFreePixmap(dpy, buf);
 	XFreeGC(dpy, gc);
 	XFreeFont(dpy, font);
 	XCloseDisplay(dpy);

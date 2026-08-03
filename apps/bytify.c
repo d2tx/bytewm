@@ -14,6 +14,7 @@
 
 static Display *dpy;
 static Window root, win;
+static Pixmap pix;
 static GC gc;
 static AppFont *afont;
 static int bh, sw;
@@ -119,9 +120,9 @@ draw(void)
 	XMapRaised(dpy, win);
 
 	XSetForeground(dpy, gc, cborder);
-	XDrawRectangle(dpy, win, gc, 0, 0, POPUP_W - 1, bh - 1);
+	XDrawRectangle(dpy, pix, gc, 0, 0, POPUP_W - 1, bh - 1);
 	XSetForeground(dpy, gc, cbg);
-	XFillRectangle(dpy, win, gc, 1, 1, POPUP_W - 2, bh - 2);
+	XFillRectangle(dpy, pix, gc, 1, 1, POPUP_W - 2, bh - 2);
 	XSetForeground(dpy, gc, cfg);
 
 	int lineh = afont->height;
@@ -129,8 +130,9 @@ draw(void)
 	for (int i = 0; i < nlines; i++) {
 		int tw = appfont_width(afont, lines[i], (int)strlen(lines[i]));
 		int tx = (POPUP_W - tw) / 2;
-		appfont_draw(afont, win, gc, &fc_fg, cfg, tx, ty + i * lineh, lines[i], (int)strlen(lines[i]));
+		appfont_draw(afont, pix, gc, &fc_fg, cfg, tx, ty + i * lineh, lines[i], (int)strlen(lines[i]));
 	}
+	XCopyArea(dpy, pix, win, gc, 0, 0, POPUP_W, bh, 0, 0);
 	XSync(dpy, 0);
 }
 
@@ -157,6 +159,7 @@ main(void)
 	bh = afont->height * MAXLINES + 12;
 
 	gc = XCreateGC(dpy, root, 0, NULL);
+	pix = XCreatePixmap(dpy, root, POPUP_W, bh, DefaultDepth(dpy, screen));
 
 	cbg = getcol(bg);
 	cfg = getcol(fg);
@@ -233,6 +236,7 @@ main(void)
 	close(fd);
 	appfont_close(afont);
 	XDestroyWindow(dpy, win);
+	XFreePixmap(dpy, pix);
 	XFreeGC(dpy, gc);
 	XCloseDisplay(dpy);
 	return 0;

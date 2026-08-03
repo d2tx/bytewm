@@ -25,6 +25,7 @@
 
 static Display *dpy;
 static Window  win;
+static Pixmap  buf;
 static GC      gc;
 static AppFont *afont;
 static int    sw, sh, scr, win_h;
@@ -167,18 +168,18 @@ draw(void)
 	int input_y = rule_y + itemh;
 
 	XSetForeground(dpy, gc, bgcol);
-	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, win_h);
+	XFillRectangle(dpy, buf, gc, 0, 0, PAPER_W, win_h);
 
 	const char *hdr = "b y t e l a u n c h";
 	int tw = appfont_width(afont, hdr, (int)strlen(hdr));
-	appfont_draw(afont, win, gc, &fc_dim, c_dim, (PAPER_W - tw) / 2, hdr_y, hdr, (int)strlen(hdr));
+	appfont_draw(afont, buf, gc, &fc_dim, c_dim, (PAPER_W - tw) / 2, hdr_y, hdr, (int)strlen(hdr));
 
 	XSetForeground(dpy, gc, bordercol);
-	XFillRectangle(dpy, win, gc, 20, rule_y, PAPER_W - 40, 2);
-	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, BORDER_W);
-	XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
-	XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, win_h);
-	XFillRectangle(dpy, win, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
+	XFillRectangle(dpy, buf, gc, 20, rule_y, PAPER_W - 40, 2);
+	XFillRectangle(dpy, buf, gc, 0, 0, PAPER_W, BORDER_W);
+	XFillRectangle(dpy, buf, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
+	XFillRectangle(dpy, buf, gc, 0, 0, BORDER_W, win_h);
+	XFillRectangle(dpy, buf, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
 
 	/* input field */
 	int fw = PAPER_W - 80;
@@ -188,9 +189,9 @@ draw(void)
 	int fh = itemh - 4;
 	int field_base = fy + (fh - afont->height) / 2 + afont->ascent;
 	XSetForeground(dpy, gc, fieldcol);
-	XFillRectangle(dpy, win, gc, fx, fy, fw, fh);
+	XFillRectangle(dpy, buf, gc, fx, fy, fw, fh);
 	XSetForeground(dpy, gc, bordercol);
-	XDrawRectangle(dpy, win, gc, fx, fy, fw - 1, fh - 1);
+	XDrawRectangle(dpy, buf, gc, fx, fy, fw - 1, fh - 1);
 
 	/* input text, keeping "> " and the visible tail of the input */
 	char disp[512];
@@ -201,12 +202,12 @@ draw(void)
 	snprintf(disp, sizeof(disp), "> %s", tail);
 	tw = appfont_width(afont, disp, (int)strlen(disp));
 	int tx = fx + 10;
-	appfont_draw(afont, win, gc, &fc_fg, fgcol, tx, field_base, disp, (int)strlen(disp));
+	appfont_draw(afont, buf, gc, &fc_fg, fgcol, tx, field_base, disp, (int)strlen(disp));
 
 	/* block cursor at the end of the text */
 	if (cursor_on) {
 		XSetForeground(dpy, gc, c_hi);
-		XFillRectangle(dpy, win, gc, tx + tw + 1, fy + (fh - 12) / 2, 7, 12);
+		XFillRectangle(dpy, buf, gc, tx + tw + 1, fy + (fh - 12) / 2, 7, 12);
 	}
 
 	/* matching items, centered in the space below the input */
@@ -226,8 +227,8 @@ draw(void)
 		truncate_label(matches[idx], tmp, sizeof(tmp), PAPER_W - 32);
 		tw = appfont_width(afont, tmp, (int)strlen(tmp));
 		if (is_sel)
-			appfont_draw(afont, win, gc, &fc_hi, c_hi, (PAPER_W - tw) / 2 - 20, y + base_off, ">", 1);
-		appfont_draw(afont, win, gc, is_sel ? &fc_hi : &fc_fg,
+			appfont_draw(afont, buf, gc, &fc_hi, c_hi, (PAPER_W - tw) / 2 - 20, y + base_off, ">", 1);
+		appfont_draw(afont, buf, gc, is_sel ? &fc_hi : &fc_fg,
 		             is_sel ? c_hi : fgcol, (PAPER_W - tw) / 2, y + base_off, tmp, (int)strlen(tmp));
 	}
 
@@ -236,9 +237,10 @@ draw(void)
 		char pg[32];
 		snprintf(pg, sizeof(pg), "[%d/%d]", page + 1, page_max + 1);
 		int pw = appfont_width(afont, pg, (int)strlen(pg));
-		appfont_draw(afont, win, gc, &fc_dim, c_dim, PAPER_W - pw - 12, ftr_y, pg, (int)strlen(pg));
+		appfont_draw(afont, buf, gc, &fc_dim, c_dim, PAPER_W - pw - 12, ftr_y, pg, (int)strlen(pg));
 	}
 
+	XCopyArea(dpy, buf, win, gc, 0, 0, PAPER_W, win_h, 0, 0);
 	XSync(dpy, 0);
 }
 
@@ -315,6 +317,7 @@ main(void)
 	if (!n_items) { appfont_close(afont); XCloseDisplay(dpy); return 1; }
 
 	gc = XCreateGC(dpy, root, 0, NULL);
+	buf = XCreatePixmap(dpy, root, PAPER_W, win_h, DefaultDepth(dpy, scr));
 	XSetWindowAttributes wa = { .override_redirect = True, .background_pixel = bgcol };
 	win = XCreateWindow(dpy, root,
 		(sw - PAPER_W) / 2, (sh - win_h) / 2,
@@ -435,6 +438,7 @@ main(void)
 
 	appfont_close(afont);
 	XDestroyWindow(dpy, win);
+	XFreePixmap(dpy, buf);
 	XFreeGC(dpy, gc);
 	XCloseDisplay(dpy);
 	for (int i = 0; i < n_items; i++) free(items[i]);

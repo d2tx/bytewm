@@ -112,7 +112,7 @@ static void countdown(Display *dpy, Window root, int screen) {
 	XSync(dpy, False);
 }
 
-static void draw_menu(Display *dpy, Window win, GC gc, AppFont *afont,
+static void draw_menu(Display *dpy, Window win, Pixmap buf, GC gc, AppFont *afont,
 	unsigned long c_bg, unsigned long c_fg, unsigned long c_hi,
 	unsigned long c_dim, unsigned long c_border,
 	XftColor *fc_fg, XftColor *fc_hi, XftColor *fc_dim,
@@ -127,18 +127,18 @@ static void draw_menu(Display *dpy, Window win, GC gc, AppFont *afont,
 	int ftr_y = win_h - (itemh / 2 + 7);
 
 	XSetForeground(dpy, gc, c_bg);
-	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, win_h);
+	XFillRectangle(dpy, buf, gc, 0, 0, PAPER_W, win_h);
 
 	const char *hdr = "b y t e s n a p";
 	int tw = appfont_width(afont, hdr, (int)strlen(hdr));
-	appfont_draw(afont, win, gc, fc_dim, c_dim, (PAPER_W - tw) / 2, hdr_y, hdr, (int)strlen(hdr));
+	appfont_draw(afont, buf, gc, fc_dim, c_dim, (PAPER_W - tw) / 2, hdr_y, hdr, (int)strlen(hdr));
 
 	XSetForeground(dpy, gc, c_border);
-	XFillRectangle(dpy, win, gc, 20, rule_y, PAPER_W - 40, 2);
-	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, BORDER_W);
-	XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
-	XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, win_h);
-	XFillRectangle(dpy, win, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
+	XFillRectangle(dpy, buf, gc, 20, rule_y, PAPER_W - 40, 2);
+	XFillRectangle(dpy, buf, gc, 0, 0, PAPER_W, BORDER_W);
+	XFillRectangle(dpy, buf, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
+	XFillRectangle(dpy, buf, gc, 0, 0, BORDER_W, win_h);
+	XFillRectangle(dpy, buf, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
 
 	int block = count * itemh;
 	int top = top_margin + ((win_h - top_margin - bot_margin) - block) / 2;
@@ -146,15 +146,16 @@ static void draw_menu(Display *dpy, Window win, GC gc, AppFont *afont,
 		int y = top + i * itemh;
 		tw = appfont_width(afont, labels[i], (int)strlen(labels[i]));
 		if (i == sel)
-			appfont_draw(afont, win, gc, fc_hi, c_hi, (PAPER_W - tw) / 2 - 20, y + base_off, ">", 1);
-		appfont_draw(afont, win, gc, i == sel ? fc_hi : fc_fg,
+			appfont_draw(afont, buf, gc, fc_hi, c_hi, (PAPER_W - tw) / 2 - 20, y + base_off, ">", 1);
+		appfont_draw(afont, buf, gc, i == sel ? fc_hi : fc_fg,
 		             i == sel ? c_hi : c_fg, (PAPER_W - tw) / 2, y + base_off, labels[i], (int)strlen(labels[i]));
 	}
 
 	const char *ftr = "j/k  enter  esc";
 	tw = appfont_width(afont, ftr, (int)strlen(ftr));
-	appfont_draw(afont, win, gc, fc_dim, c_dim, (PAPER_W - tw) / 2, ftr_y, ftr, (int)strlen(ftr));
+	appfont_draw(afont, buf, gc, fc_dim, c_dim, (PAPER_W - tw) / 2, ftr_y, ftr, (int)strlen(ftr));
 
+	XCopyArea(dpy, buf, win, gc, 0, 0, PAPER_W, win_h, 0, 0);
 	XSync(dpy, False);
 }
 
@@ -191,6 +192,7 @@ static int show_menu(Display *dpy, int screen, int sw, int sh) {
 		DefaultVisual(dpy, screen),
 		CWOverrideRedirect | CWBackPixel | CWEventMask, &wa);
 	GC gc = XCreateGC(dpy, root, 0, NULL);
+	Pixmap buf = XCreatePixmap(dpy, root, PAPER_W, win_h, DefaultDepth(dpy, screen));
 
 	XMapRaised(dpy, win);
 	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
@@ -203,14 +205,14 @@ static int show_menu(Display *dpy, int screen, int sw, int sh) {
 	while (1) {
 		XNextEvent(dpy, &ev);
 		if (ev.type == Expose && ev.xexpose.count == 0)
-			draw_menu(dpy, win, gc, afont, c_bg, c_fg, c_hi, c_dim, c_border,
+			draw_menu(dpy, win, buf, gc, afont, c_bg, c_fg, c_hi, c_dim, c_border,
 				&fc_fg, &fc_hi, &fc_dim, labels, count, sel, win_h);
 		else if (ev.type == KeyPress) {
 			KeySym ks = XLookupKeysym(&ev.xkey, 0);
-			if (ks == XK_j || ks == XK_Down) { sel++; if (sel >= count) sel = 0; draw_menu(dpy, win, gc, afont, c_bg, c_fg, c_hi, c_dim, c_border, &fc_fg, &fc_hi, &fc_dim, labels, count, sel, win_h); }
-			else if (ks == XK_k || ks == XK_Up) { sel--; if (sel < 0) sel = count - 1; draw_menu(dpy, win, gc, afont, c_bg, c_fg, c_hi, c_dim, c_border, &fc_fg, &fc_hi, &fc_dim, labels, count, sel, win_h); }
-			else if (ks == XK_Return) { appfont_close(afont); XFreeGC(dpy, gc); XDestroyWindow(dpy, win); XUngrabPointer(dpy, CurrentTime); return sel; }
-			else if (ks == XK_Escape || ks == XK_q) { appfont_close(afont); XFreeGC(dpy, gc); XDestroyWindow(dpy, win); XUngrabPointer(dpy, CurrentTime); return -1; }
+			if (ks == XK_j || ks == XK_Down) { sel++; if (sel >= count) sel = 0; draw_menu(dpy, win, buf, gc, afont, c_bg, c_fg, c_hi, c_dim, c_border, &fc_fg, &fc_hi, &fc_dim, labels, count, sel, win_h); }
+			else if (ks == XK_k || ks == XK_Up) { sel--; if (sel < 0) sel = count - 1; draw_menu(dpy, win, buf, gc, afont, c_bg, c_fg, c_hi, c_dim, c_border, &fc_fg, &fc_hi, &fc_dim, labels, count, sel, win_h); }
+			else if (ks == XK_Return) { appfont_close(afont); XFreeGC(dpy, gc); XFreePixmap(dpy, buf); XDestroyWindow(dpy, win); XUngrabPointer(dpy, CurrentTime); return sel; }
+			else if (ks == XK_Escape || ks == XK_q) { appfont_close(afont); XFreeGC(dpy, gc); XFreePixmap(dpy, buf); XDestroyWindow(dpy, win); XUngrabPointer(dpy, CurrentTime); return -1; }
 		}
 	}
 }

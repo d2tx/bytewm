@@ -18,6 +18,7 @@
 
 static Display *dpy;
 static Window root, win;
+static Pixmap buf;
 static GC gc;
 static AppFont *afont;
 static int sw, sh, win_h;
@@ -76,18 +77,18 @@ static void draw(void) {
     int ftr_y = win_h - (itemh / 2 + 7);
 
     XSetForeground(dpy, gc, c_bg);
-    XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, win_h);
+    XFillRectangle(dpy, buf, gc, 0, 0, PAPER_W, win_h);
 
     const char *hdr = "s w i t c h";
     int tw = appfont_width(afont, hdr, (int)strlen(hdr));
-    appfont_draw(afont, win, gc, &fc_dim, c_dim, (PAPER_W - tw) / 2, hdr_y, hdr, (int)strlen(hdr));
+    appfont_draw(afont, buf, gc, &fc_dim, c_dim, (PAPER_W - tw) / 2, hdr_y, hdr, (int)strlen(hdr));
 
     XSetForeground(dpy, gc, c_border);
-    XFillRectangle(dpy, win, gc, 20, rule_y, PAPER_W - 40, 2);
-    XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, BORDER_W);
-    XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
-    XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, win_h);
-    XFillRectangle(dpy, win, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
+    XFillRectangle(dpy, buf, gc, 20, rule_y, PAPER_W - 40, 2);
+    XFillRectangle(dpy, buf, gc, 0, 0, PAPER_W, BORDER_W);
+    XFillRectangle(dpy, buf, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
+    XFillRectangle(dpy, buf, gc, 0, 0, BORDER_W, win_h);
+    XFillRectangle(dpy, buf, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
 
     int start = page * per_page;
     int pc = count - start;
@@ -103,8 +104,8 @@ static void draw(void) {
         truncate_label(labels[idx], tmp, sizeof(tmp), PAPER_W - 32);
         tw = appfont_width(afont, tmp, (int)strlen(tmp));
         if (is_sel)
-            appfont_draw(afont, win, gc, &fc_hi, c_hi, (PAPER_W - tw) / 2 - 20, y + base_off, ">", 1);
-        appfont_draw(afont, win, gc, is_sel ? &fc_hi : &fc_fg,
+            appfont_draw(afont, buf, gc, &fc_hi, c_hi, (PAPER_W - tw) / 2 - 20, y + base_off, ">", 1);
+        appfont_draw(afont, buf, gc, is_sel ? &fc_hi : &fc_fg,
                      is_sel ? c_hi : c_fg, (PAPER_W - tw) / 2, y + base_off, tmp, (int)strlen(tmp));
     }
 
@@ -113,9 +114,10 @@ static void draw(void) {
         char pg[32];
         snprintf(pg, sizeof(pg), "[%d/%d]", page + 1, page_max + 1);
         int pw = appfont_width(afont, pg, (int)strlen(pg));
-        appfont_draw(afont, win, gc, &fc_dim, c_dim, PAPER_W - pw - 12, ftr_y, pg, (int)strlen(pg));
+        appfont_draw(afont, buf, gc, &fc_dim, c_dim, PAPER_W - pw - 12, ftr_y, pg, (int)strlen(pg));
     }
 
+    XCopyArea(dpy, buf, win, gc, 0, 0, PAPER_W, win_h, 0, 0);
     XSync(dpy, False);
 }
 
@@ -275,6 +277,7 @@ int main(void) {
         DefaultVisual(dpy, scr),
         CWOverrideRedirect | CWBackPixel | CWEventMask, &wa);
     gc = XCreateGC(dpy, win, 0, NULL);
+    buf = XCreatePixmap(dpy, root, PAPER_W, win_h, DefaultDepth(dpy, scr));
 
 
     XMapRaised(dpy, win);
@@ -380,6 +383,7 @@ int main(void) {
     XSync(dpy, False);          /* flush activate before destroy */
     appfont_close(afont);
     XFreeGC(dpy, gc);
+    XFreePixmap(dpy, buf);
     XDestroyWindow(dpy, win);
     XSync(dpy, False);          /* ensure server processes destroy */
     XCloseDisplay(dpy);

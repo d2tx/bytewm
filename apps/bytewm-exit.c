@@ -14,6 +14,7 @@
 
 static Display *dpy;
 static Window win;
+static Pixmap buf;
 static GC gc;
 static AppFont *afont;
 static int sw, sh, win_h, itemh;
@@ -60,29 +61,30 @@ redraw(void)
 	int base_off = itemh - 8;
 
 	XSetForeground(dpy, gc, cbg);
-	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, win_h);
+	XFillRectangle(dpy, buf, gc, 0, 0, PAPER_W, win_h);
 
 	const char *hdr = "e x i t";
 	int tw = appfont_width(afont, hdr, (int)strlen(hdr));
-	appfont_draw(afont, win, gc, &fc_dim, cdim, (PAPER_W - tw) / 2, hdr_y, hdr, (int)strlen(hdr));
+	appfont_draw(afont, buf, gc, &fc_dim, cdim, (PAPER_W - tw) / 2, hdr_y, hdr, (int)strlen(hdr));
 
 	XSetForeground(dpy, gc, cborder);
-	XFillRectangle(dpy, win, gc, 20, rule_y, PAPER_W - 40, 2);
-	XFillRectangle(dpy, win, gc, 0, 0, PAPER_W, BORDER_W);
-	XFillRectangle(dpy, win, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
-	XFillRectangle(dpy, win, gc, 0, 0, BORDER_W, win_h);
-	XFillRectangle(dpy, win, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
+	XFillRectangle(dpy, buf, gc, 20, rule_y, PAPER_W - 40, 2);
+	XFillRectangle(dpy, buf, gc, 0, 0, PAPER_W, BORDER_W);
+	XFillRectangle(dpy, buf, gc, 0, win_h - BORDER_W, PAPER_W, BORDER_W);
+	XFillRectangle(dpy, buf, gc, 0, 0, BORDER_W, win_h);
+	XFillRectangle(dpy, buf, gc, PAPER_W - BORDER_W, 0, BORDER_W, win_h);
 
 	int top = item_top();
 	for (int i = 0; i < nitems; i++) {
 		int y = top + i * itemh;
 		tw = appfont_width(afont, items[i], (int)strlen(items[i]));
 		if (i == selected)
-			appfont_draw(afont, win, gc, &fc_hi, chi, (PAPER_W - tw) / 2 - 20, y + base_off, ">", 1);
-		appfont_draw(afont, win, gc, i == selected ? &fc_hi : &fc_fg,
+			appfont_draw(afont, buf, gc, &fc_hi, chi, (PAPER_W - tw) / 2 - 20, y + base_off, ">", 1);
+		appfont_draw(afont, buf, gc, i == selected ? &fc_hi : &fc_fg,
 		             i == selected ? chi : cfg, (PAPER_W - tw) / 2, y + base_off, items[i], (int)strlen(items[i]));
 	}
 
+	XCopyArea(dpy, buf, win, gc, 0, 0, PAPER_W, win_h, 0, 0);
 	XFlush(dpy);
 }
 
@@ -147,6 +149,7 @@ main(int argc, char *argv[])
 		CWOverrideRedirect|CWBackPixel, &wa);
 
 	gc = XCreateGC(dpy, win, 0, NULL);
+	buf = XCreatePixmap(dpy, root, PAPER_W, win_h, DefaultDepth(dpy, screen));
 
 	XSelectInput(dpy, win, ExposureMask | KeyPressMask |
 		ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
@@ -188,6 +191,7 @@ main(int argc, char *argv[])
 
 	appfont_close(afont);
 	XDestroyWindow(dpy, win);
+	XFreePixmap(dpy, buf);
 	XFreeGC(dpy, gc);
 	XCloseDisplay(dpy);
 	return 0;

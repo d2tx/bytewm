@@ -16,7 +16,9 @@
 
 static Display *dpy;
 static Window root, win;
+static Pixmap buf;
 static GC gc;
+static int buf_w, buf_h, depth;
 static AppFont *afont;
 static int bh, sw, sh;
 static int level = -1;   /* displayed volume 0-100, -1 = hidden */
@@ -124,25 +126,36 @@ draw(void)
 	XMoveResizeWindow(dpy, win, x, y, w, bh);
 	XMapRaised(dpy, win);
 
+	if (buf && (buf_w != w || buf_h != bh)) {
+		XFreePixmap(dpy, buf);
+		buf = 0;
+	}
+	if (!buf) {
+		buf = XCreatePixmap(dpy, root, w, bh, depth);
+		buf_w = w;
+		buf_h = bh;
+	}
+
 	XSetForeground(dpy, gc, bordercol);
-	XDrawRectangle(dpy, win, gc, 0, 0, w - 1, bh - 1);
+	XDrawRectangle(dpy, buf, gc, 0, 0, w - 1, bh - 1);
 	XSetForeground(dpy, gc, bgcol);
-	XFillRectangle(dpy, win, gc, 1, 1, w - 2, bh - 2);
+	XFillRectangle(dpy, buf, gc, 1, 1, w - 2, bh - 2);
 	XSetForeground(dpy, gc, fgcol);
 	int tx = 8;
 	int ty = (bh - afont->height) / 2 + afont->ascent;
-	appfont_draw(afont, win, gc, &fc_fg, fgcol, tx, ty, label, (int)strlen(label));
+	appfont_draw(afont, buf, gc, &fc_fg, fgcol, tx, ty, label, (int)strlen(label));
 
 	int barx = tw + 8;
 	int bary = bh / 3;
 	int barw = bw;
 	int barh = bh / 3;
 	XSetForeground(dpy, gc, bgcol);
-	XFillRectangle(dpy, win, gc, barx, bary, barw, barh);
+	XFillRectangle(dpy, buf, gc, barx, bary, barw, barh);
 	XSetForeground(dpy, gc, barcol);
-	XFillRectangle(dpy, win, gc, barx, bary,
+	XFillRectangle(dpy, buf, gc, barx, bary,
 		muted ? 0 : barw * level / 100, barh);
 
+	XCopyArea(dpy, buf, win, gc, 0, 0, w, bh, 0, 0);
 	XSync(dpy, 0);
 }
 
@@ -196,6 +209,7 @@ main(int argc, char *argv[])
 	root = RootWindow(dpy, screen);
 	sw = DisplayWidth(dpy, screen);
 	sh = DisplayHeight(dpy, screen);
+	depth = DefaultDepth(dpy, screen);
 
 	afont = appfont_open(dpy, appfont_sharedname());
 	if (!afont) return 1;
@@ -245,6 +259,7 @@ main(int argc, char *argv[])
 		XUnmapWindow(dpy, win);
 		appfont_close(afont);
 		XDestroyWindow(dpy, win);
+		if (buf) XFreePixmap(dpy, buf);
 		XFreeGC(dpy, gc);
 		XCloseDisplay(dpy);
 		return 0;
@@ -257,6 +272,7 @@ main(int argc, char *argv[])
 	if (fd < 0) {
 		appfont_close(afont);
 		XDestroyWindow(dpy, win);
+		if (buf) XFreePixmap(dpy, buf);
 		XFreeGC(dpy, gc);
 		XCloseDisplay(dpy);
 		return 1;
@@ -267,6 +283,7 @@ main(int argc, char *argv[])
 			close(fd);
 			appfont_close(afont);
 			XDestroyWindow(dpy, win);
+			if (buf) XFreePixmap(dpy, buf);
 			XFreeGC(dpy, gc);
 			XCloseDisplay(dpy);
 			return 1;
@@ -343,6 +360,7 @@ main(int argc, char *argv[])
 	close(fd);
 	appfont_close(afont);
 	XDestroyWindow(dpy, win);
+	if (buf) XFreePixmap(dpy, buf);
 	XFreeGC(dpy, gc);
 	XCloseDisplay(dpy);
 	return 0;
