@@ -23,11 +23,27 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <stdarg.h>
+#include <time.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 
 #define FIFO_PATH "/tmp/bytewm-disp.fifo"
+#define LOG_PATH  "/tmp/bytewm-disp.log"
 #define MAX_OUT  32
+
+static FILE *logf = NULL;
+
+static void
+logmsg(const char *fmt, ...)
+{
+	if (!logf) return;
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(logf, fmt, ap);
+	va_end(ap);
+	fflush(logf);
+}
 
 static Display *dpy;
 static int rrev_base = 0;     /* RandR event base */
@@ -35,6 +51,7 @@ static int have_rr = 0;
 static int curmode = 0;       /* 0=external, 1=both, 2=internal */
 static char last_conn[MAX_OUT][64];  /* last known connection state per output */
 static int last_nconn = 0;
+static char known_internal[64] = ""; /* internal panel learned at startup */
 
 /* true if the set of connected outputs changed since we last recorded it
    (hotplug). Pure mode/resolution changes (e.g. bytemenu picking a new res)
@@ -73,6 +90,9 @@ connection_changed(void)
 		for (int i = 0; i < ncur; i++)
 			snprintf(last_conn[i], sizeof(last_conn[0]), "%s", cur[i]);
 		last_nconn = ncur;
+		logmsg("connection set changed: %d outputs\n", ncur);
+		for (int i = 0; i < ncur; i++)
+			logmsg("  connected: %s\n", cur[i]);
 	}
 	return changed;
 }
@@ -81,15 +101,17 @@ static int
 is_internal(const char *name)
 {
 	if (!name) return 0;
+	/* if we learned the panel name at startup, that wins */
+	if (known_internal[0] && !strcmp(known_internal, name))
+		return 1;
 	/* explicitly external connector types - never the internal panel */
 	if (strncmp(name, "HDMI", 4) == 0 || strncmp(name, "DVI", 3) == 0 ||
 	    strncmp(name, "VGA", 3) == 0 ||
 	    strncmp(name, "DisplayPort", 11) == 0 ||
 	    strncmp(name, "DP-", 3) == 0)
 		return 0;
-	/* everything else defaults to internal - laptops name their panels
-	   eDP/LVDS/LCD/IDP etc, but unusual names must not be treated as
-	   external (which would force the saved external res onto the panel) */
+	/* laptop panels are usually eDP/LVDS/LCD/IDP; anything without an
+	   external-connector prefix defaults to internal */
 	return 1;
 }
 
@@ -127,6 +149,36 @@ run_xrandr(const char *fmt, const char *name)
 }
 
 static void
+learn_internal(void)
+{
+	/* if exactly one output is connected at startup (no external yet),
+	   it must be the laptop panel - remember it as internal */
+	Window root = RootWindow(dpy, DefaultScreen(dpy));
+	XRRScreenResources *res = XRRGetScreenResources(dpy, root);
+	if (!res) return;
+	int nconnected = 0;
+	char name[64] = "";
+	for (int i = 0; i < res->noutput; i++) {
+		XRROutputInfo *oi = XRRGetOutputInfo(dpy, res, res->outputs[i]);
+		if (!oi) continue;
+		if (oi->connection == RR_Connected) {
+			int nlen = oi->nameLen;
+			if (nlen < 0) nlen = 0;
+			if (nlen > 63) nlen = 63;
+			memcpy(name, oi->name, (size_t)nlen);
+			name[nlen] = '\0';
+			nconnected++;
+		}
+		XRRFreeOutputInfo(oi);
+	}
+	XRRFreeScreenResources(res);
+	if (nconnected == 1 && name[0]) {
+		snprintf(known_internal, sizeof(known_internal), "%s", name);
+		logmsg("learned internal panel: %s\n", name);
+	}
+}
+
+static void
 apply_mode(void)
 {
 	Window root = RootWindow(dpy, DefaultScreen(dpy));
@@ -159,12 +211,12 @@ apply_mode(void)
 		XRRFreeOutputInfo(oi);
 	}
 
-	fprintf(stderr, "bytewm-disp: connected internal=%d external=%d\n",
-		ninternal, nexternal);
-	for (int i = 0; i < ninternal; i++)
-		fprintf(stderr, "  internal: %s\n", internal[i]);
-	for (int i = 0; i < nexternal; i++)
-		fprintf(stderr, "  external: %s\n", external[i]);
+ 	logmsg("apply_mode: internal=%d external=%d mode=%d\n",
+ 		ninternal, nexternal, curmode);
+ 	for (int i = 0; i < ninternal; i++)
+ 		logmsg("  internal: %s\n", internal[i]);
+ 	for (int i = 0; i < nexternal; i++)
+ 		logmsg("  external: %s\n", external[i]);
 
  	int want_both = (curmode == 1);
  	int want_internal_only = (curmode == 2);
@@ -247,8 +299,18 @@ main(void)
 	XRRSelectInput(dpy, root,
 		RROutputChangeNotifyMask | RRScreenChangeNotifyMask);
 
+	/* file log (stderr is lost when started from autostart) */
+	logf = fopen(LOG_PATH, "a");
+	if (logf) {
+		time_t t = time(NULL);
+		char ts[64];
+		strftime(ts, sizeof(ts), "%H:%M:%S", localtime(&t));
+		logmsg("--- bytewm-disp start %s ---\n", ts);
+	}
+
 	/* initial application of policy */
 	connection_changed();   /* seed the recorded connection state */
+	learn_internal();
 	apply_mode();
 
 	/* open fifo (create if missing) */
