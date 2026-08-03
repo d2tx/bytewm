@@ -202,16 +202,31 @@ static void build_game_command(int idx) {
 	   wine uses its default prefix. Always cd into the game directory
 	   first: many old games load their data files relative to the
 	   current working directory, not the exe path. */
-	if (!strcmp(proton_expanded, "wine")) {
+	int use_mh = game_extra[idx] && strstr(game_extra[idx], "MANGOHUD=1");
+	if (use_mh) {
+		/* the mangohud wrapper sets MANGOHUD=1 and preloads the right
+		   32/64-bit shim via LD_PRELOAD; the bare env var alone does
+		   not hook OpenGL/wine processes */
+		if (!strcmp(proton_expanded, "wine"))
+			snprintf(game_cmd_buf[idx], sizeof(game_cmd_buf[idx]),
+				"cd '%s' && mangohud wine '%s'",
+				prefix_expanded, exe_expanded);
+		else
+			snprintf(game_cmd_buf[idx], sizeof(game_cmd_buf[idx]),
+				"cd '%s' && mangohud WINEPREFIX='%s' PROTONPATH='%s' umu-run '%s'",
+				prefix_expanded, prefix_expanded, proton_expanded, exe_expanded);
+	} else if (!strcmp(proton_expanded, "wine")) {
 		snprintf(game_cmd_buf[idx], sizeof(game_cmd_buf[idx]),
-			"%s cd '%s' && wine '%s'",
+			"cd '%s' && %s wine '%s'",
+			prefix_expanded,
 			game_extra[idx] ? game_extra[idx] : "",
-			prefix_expanded, exe_expanded);
+			exe_expanded);
 	} else {
 		snprintf(game_cmd_buf[idx], sizeof(game_cmd_buf[idx]),
-			"%s cd '%s' && WINEPREFIX='%s' PROTONPATH='%s' umu-run '%s'",
+			"cd '%s' && %s WINEPREFIX='%s' PROTONPATH='%s' umu-run '%s'",
+			prefix_expanded,
 			game_extra[idx] ? game_extra[idx] : "",
-			prefix_expanded, prefix_expanded, proton_expanded, exe_expanded);
+			prefix_expanded, proton_expanded, exe_expanded);
 	}
 }
 
